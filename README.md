@@ -150,7 +150,9 @@ Options:
 
 ## Interactive Dashboard Features
 
-The generated HTML report is a fully self-contained, dark-themed dashboard:
+The generated HTML report is a fully self-contained, dark-themed dashboard.
+
+**[View Sample Report](https://htmlpreview.github.io/?https://github.com/anildwarepo/AzureAgent/blob/main/docs/sample_report.html)**
 
 - **Summary cards** — Total inventory, scanned, unused, idle, orphaned, needs review, skipped
 - **Findings by Classification** — Donut chart (UNUSED, IDLE, ORPHANED, REVIEW)
