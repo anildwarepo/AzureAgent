@@ -1,7 +1,7 @@
 # Generated scan outputs
 azqr_action_plan_*.json
 unused_resources_*.json
-unused_resources_*.html
+
 
 # Python
 __pycache__/
