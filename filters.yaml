@@ -1,0 +1,9 @@
+includeSections:
+  - Costs
+  - Advisor
+  - Inventory
+  - Orphaned
+excludeSections:
+  - Recommendations
+  - AzurePolicy
+  - DefenderRecommendations

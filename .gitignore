@@ -1,0 +1,25 @@
+# Generated scan outputs
+azqr_action_plan_*.json
+unused_resources_*.json
+unused_resources_*.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
