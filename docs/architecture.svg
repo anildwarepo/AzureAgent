@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" font-family="Segoe UI, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1117"/>
+      <stop offset="100%" stop-color="#1a1d27"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#6ee7b7"/>
+    </linearGradient>
+    <linearGradient id="scannerGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="100%" stop-color="#1e3a5f"/>
+    </linearGradient>
+    <linearGradient id="reportGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#164e63"/>
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+    <marker id="arrowHead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#818cf8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="720" rx="12" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="480" y="38" text-anchor="middle" font-size="20" font-weight="700" fill="url(#headerGrad)">Azure Unused Resource Scanner — Architecture</text>
+
+  <!-- ===== Azure APIs (left column - sources) ===== -->
+  <!-- azqr CLI -->
+  <rect x="40" y="80" width="200" height="54" rx="10" fill="#1e1b4b" stroke="#4338ca" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="140" y="103" text-anchor="middle" font-size="11" font-weight="600" fill="#a5b4fc">azqr CLI</text>
+  <text x="140" y="121" text-anchor="middle" font-size="9" fill="#8b8fa3">Inventory + Advisor + AOR</text>
+
+  <!-- Resource Graph -->
+  <rect x="40" y="150" width="200" height="54" rx="10" fill="#1e1b4b" stroke="#4338ca" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="140" y="173" text-anchor="middle" font-size="11" font-weight="600" fill="#a5b4fc">Azure Resource Graph</text>
+  <text x="140" y="191" text-anchor="middle" font-size="9" fill="#8b8fa3">Kusto queries (2 batches)</text>
+
+  <!-- Monitor Metrics -->
+  <rect x="40" y="220" width="200" height="54" rx="10" fill="#1e1b4b" stroke="#4338ca" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="140" y="243" text-anchor="middle" font-size="11" font-weight="600" fill="#a5b4fc">Azure Monitor Metrics</text>
+  <text x="140" y="261" text-anchor="middle" font-size="9" fill="#8b8fa3">30-day lookback, 16 types</text>
+
+  <!-- Activity Logs -->
+  <rect x="40" y="290" width="200" height="54" rx="10" fill="#1e1b4b" stroke="#4338ca" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="140" y="313" text-anchor="middle" font-size="11" font-weight="600" fill="#a5b4fc">Activity Logs</text>
+  <text x="140" y="331" text-anchor="middle" font-size="9" fill="#8b8fa3">90-day last-touch audit</text>
+
+  <!-- ===== scan_unused.py (center) ===== -->
+  <rect x="310" y="72" width="340" height="290" rx="14" fill="url(#scannerGrad)" stroke="#4338ca" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="480" y="100" text-anchor="middle" font-size="15" font-weight="700" fill="#e4e6eb">scan_unused.py</text>
+
+  <!-- Phase boxes inside scanner -->
+  <rect x="330" y="115" width="300" height="38" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366f1" stroke-width="1"/>
+  <text x="345" y="130" font-size="10" font-weight="700" fill="#f39c12">Phase 0</text>
+  <text x="405" y="130" font-size="10" fill="#e4e6eb">azqr scan → resource inventory + AOR rules</text>
+  <text x="345" y="145" font-size="9" fill="#8b8fa3">325 resources inventoried</text>
+
+  <rect x="330" y="162" width="300" height="38" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366f1" stroke-width="1"/>
+  <text x="345" y="177" font-size="10" font-weight="700" fill="#e74c3c">Phase 1</text>
+  <text x="405" y="177" font-size="10" fill="#e4e6eb">Resource Graph → orphaned / stopped</text>
+  <text x="345" y="192" font-size="9" fill="#8b8fa3">8 resource types, 2 query batches</text>
+
+  <rect x="330" y="209" width="300" height="38" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366f1" stroke-width="1"/>
+  <text x="345" y="224" font-size="10" font-weight="700" fill="#f39c12">Phase 2</text>
+  <text x="405" y="224" font-size="10" fill="#e4e6eb">Monitor metrics → idle detection</text>
+  <text x="345" y="239" font-size="9" fill="#8b8fa3">Parallel ThreadPoolExecutor, 16 types</text>
+
+  <rect x="330" y="256" width="300" height="38" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366f1" stroke-width="1"/>
+  <text x="345" y="271" font-size="10" font-weight="700" fill="#3498db">Phase 3</text>
+  <text x="405" y="271" font-size="10" fill="#e4e6eb">Activity logs → last-touch enrichment</text>
+  <text x="345" y="286" font-size="9" fill="#8b8fa3">90-day caller + timestamp audit</text>
+
+  <!-- Output label -->
+  <rect x="370" y="310" width="220" height="36" rx="8" fill="rgba(46,204,113,0.12)" stroke="#2ecc71" stroke-width="1"/>
+  <text x="480" y="328" text-anchor="middle" font-size="10" fill="#2ecc71">📄 unused_resources_&lt;ts&gt;.json</text>
+  <text x="480" y="340" text-anchor="middle" font-size="8" fill="#8b8fa3">Findings + classifications + evidence</text>
+
+  <!-- ===== Arrows: APIs → scanner ===== -->
+  <line x1="240" y1="107" x2="308" y2="134" stroke="#818cf8" stroke-width="1.5" marker-end="url(#arrowHead)" opacity="0.7"/>
+  <line x1="240" y1="177" x2="308" y2="181" stroke="#818cf8" stroke-width="1.5" marker-end="url(#arrowHead)" opacity="0.7"/>
+  <line x1="240" y1="247" x2="308" y2="228" stroke="#818cf8" stroke-width="1.5" marker-end="url(#arrowHead)" opacity="0.7"/>
+  <line x1="240" y1="317" x2="308" y2="275" stroke="#818cf8" stroke-width="1.5" marker-end="url(#arrowHead)" opacity="0.7"/>
+
+  <!-- ===== Arrow: scanner → JSON → report ===== -->
+  <line x1="480" y1="362" x2="480" y2="400" stroke="url(#arrowGrad)" stroke-width="2" marker-end="url(#arrowHead)" filter="url(#glow)"/>
+
+  <!-- ===== generate_report.py (center bottom) ===== -->
+  <rect x="310" y="405" width="340" height="170" rx="14" fill="url(#reportGrad)" stroke="#0891b2" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="480" y="433" text-anchor="middle" font-size="15" font-weight="700" fill="#e4e6eb">generate_report.py</text>
+
+  <!-- Features list -->
+  <text x="335" y="458" font-size="10" fill="#6ee7b7">●</text>
+  <text x="350" y="458" font-size="10" fill="#e4e6eb">Summary cards</text>
+  <text x="500" y="458" font-size="10" fill="#6ee7b7">●</text>
+  <text x="515" y="458" font-size="10" fill="#e4e6eb">Donut &amp; bar charts</text>
+
+  <text x="335" y="478" font-size="10" fill="#6ee7b7">●</text>
+  <text x="350" y="478" font-size="10" fill="#e4e6eb">Filterable DataTable</text>
+  <text x="500" y="478" font-size="10" fill="#6ee7b7">●</text>
+  <text x="515" y="478" font-size="10" fill="#e4e6eb">Search &amp; pagination</text>
+
+  <text x="335" y="498" font-size="10" fill="#6ee7b7">●</text>
+  <text x="350" y="498" font-size="10" fill="#e4e6eb">EMAIL OWNER badges</text>
+  <text x="500" y="498" font-size="10" fill="#6ee7b7">●</text>
+  <text x="515" y="498" font-size="10" fill="#e4e6eb">Bulk email from chart</text>
+
+  <!-- Report output -->
+  <rect x="370" y="520" width="220" height="36" rx="8" fill="rgba(46,204,113,0.12)" stroke="#2ecc71" stroke-width="1"/>
+  <text x="480" y="538" text-anchor="middle" font-size="10" fill="#2ecc71">🌐 unused_resources_&lt;ts&gt;.html</text>
+  <text x="480" y="550" text-anchor="middle" font-size="8" fill="#8b8fa3">Self-contained interactive dashboard</text>
+
+  <!-- ===== Arrow: report → email ===== -->
+  <line x1="480" y1="575" x2="480" y2="610" stroke="url(#arrowGrad)" stroke-width="2" marker-end="url(#arrowHead)" filter="url(#glow)"/>
+
+  <!-- ===== Email Action (bottom) ===== -->
+  <rect x="350" y="615" width="260" height="60" rx="14" fill="rgba(155,89,182,0.12)" stroke="#9b59b6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="480" y="641" text-anchor="middle" font-size="13" font-weight="700" fill="#c084fc">✉ Email Owner</text>
+  <text x="480" y="660" text-anchor="middle" font-size="9" fill="#8b8fa3">mailto: compose with resource details</text>
+
+  <!-- ===== Classification legend (right side) ===== -->
+  <rect x="710" y="80" width="210" height="200" rx="12" fill="#1a1d27" stroke="#2a2d3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="815" y="108" text-anchor="middle" font-size="12" font-weight="700" fill="#e4e6eb">Classifications</text>
+
+  <rect x="730" y="122" width="12" height="12" rx="3" fill="#e74c3c"/>
+  <text x="752" y="133" font-size="11" fill="#e4e6eb">UNUSED</text>
+  <text x="752" y="147" font-size="8" fill="#8b8fa3">Confirmed not running</text>
+
+  <rect x="730" y="160" width="12" height="12" rx="3" fill="#f39c12"/>
+  <text x="752" y="171" font-size="11" fill="#e4e6eb">IDLE</text>
+  <text x="752" y="185" font-size="8" fill="#8b8fa3">Running, zero activity 30d</text>
+
+  <rect x="730" y="198" width="12" height="12" rx="3" fill="#e67e22"/>
+  <text x="752" y="209" font-size="11" fill="#e4e6eb">ORPHANED</text>
+  <text x="752" y="223" font-size="8" fill="#8b8fa3">Detached from parent</text>
+
+  <rect x="730" y="236" width="12" height="12" rx="3" fill="#3498db"/>
+  <text x="752" y="247" font-size="11" fill="#e4e6eb">REVIEW</text>
+  <text x="752" y="261" font-size="8" fill="#8b8fa3">Needs manual check</text>
+
+  <!-- ===== Stats panel (right side) ===== -->
+  <rect x="710" y="300" width="210" height="170" rx="12" fill="#1a1d27" stroke="#2a2d3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="815" y="328" text-anchor="middle" font-size="12" font-weight="700" fill="#e4e6eb">Detection Coverage</text>
+
+  <text x="730" y="352" font-size="10" font-weight="600" fill="#a5b4fc">Resource Graph</text>
+  <text x="730" y="367" font-size="9" fill="#8b8fa3">8 types: VMs, Disks, IPs, NICs,</text>
+  <text x="730" y="380" font-size="9" fill="#8b8fa3">NSGs, NAT GW, ASP, LB</text>
+
+  <text x="730" y="402" font-size="10" font-weight="600" fill="#a5b4fc">Monitor Metrics</text>
+  <text x="730" y="417" font-size="9" fill="#8b8fa3">16 types: Storage, SQL, Cosmos,</text>
+  <text x="730" y="430" font-size="9" fill="#8b8fa3">EventHub, ACR, KeyVault, ...</text>
+
+  <text x="730" y="452" font-size="10" font-weight="600" fill="#a5b4fc">Activity Logs</text>
+  <text x="730" y="467" font-size="9" fill="#8b8fa3">ML Workspaces, Databricks,</text>
+  <text x="730" y="480" font-size="9" fill="#8b8fa3">+ all flagged enrichment</text>
+
+  <!-- ===== Tech stack (right bottom) ===== -->
+  <rect x="710" y="490" width="210" height="90" rx="12" fill="#1a1d27" stroke="#2a2d3a" stroke-width="1" filter="url(#shadow)"/>
+  <text x="815" y="516" text-anchor="middle" font-size="12" font-weight="700" fill="#e4e6eb">Tech Stack</text>
+  <text x="730" y="538" font-size="9" fill="#8b8fa3">Python 3.10+ · Azure SDK</text>
+  <text x="730" y="553" font-size="9" fill="#8b8fa3">Chart.js · DataTables · jQuery</text>
+  <text x="730" y="568" font-size="9" fill="#8b8fa3">azqr CLI · DefaultAzureCredential</text>
+
+  <!-- Footer -->
+  <text x="480" y="705" text-anchor="middle" font-size="9" fill="#4b5563">Azure Unused Resource Scanner · github.com/your-org/AzureAgent</text>
+</svg>

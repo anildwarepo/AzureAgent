@@ -34,33 +34,9 @@ Each finding is classified based on evidence:
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    scan_unused.py                        │
-│                                                         │
-│  Phase 0: azqr CLI ──► Resource inventory + AOR rules   │
-│  Phase 1: Resource Graph ──► Orphaned / Stopped         │
-│  Phase 2: Monitor Metrics ──► Idle detection (parallel) │
-│  Phase 3: Activity Logs ──► Last-touch audit            │
-│                                                         │
-│  Output: unused_resources_<timestamp>.json               │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                  generate_report.py                      │
-│                                                         │
-│  Interactive HTML dashboard with:                        │
-│  • Summary cards (totals by classification)              │
-│  • Donut charts (classification, recommendations)        │
-│  • Bar charts (resource type, resource group)            │
-│  • Filterable DataTable with search                      │
-│  • Clickable EMAIL OWNER badges → mailto: compose        │
-│  • Bulk email from chart click → all items in one email  │
-│                                                         │
-│  Output: unused_resources_<timestamp>.html               │
-└─────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Architecture Diagram" width="960"/>
+</p>
 
 ---
 
