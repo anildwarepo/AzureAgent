@@ -60,7 +60,21 @@ git clone https://github.com/<your-org>/AzureAgent.git
 cd AzureAgent
 ```
 
-### 2. Install Python dependencies
+### 2. Create a Python virtual environment
+
+```bash
+python -m venv .venv
+```
+
+Activate it:
+
+| OS | Command |
+|----|---------|
+| **Windows (PowerShell)** | `.venv\Scripts\Activate.ps1` |
+| **Windows (CMD)** | `.venv\Scripts\activate.bat` |
+| **macOS / Linux** | `source .venv/bin/activate` |
+
+### 3. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -72,14 +86,14 @@ This installs:
 - `azure-mgmt-monitor` — Metrics and activity log access
 - `azure-mgmt-resource` — Resource management client
 
-### 3. Authenticate to Azure
+### 4. Authenticate to Azure
 
 ```bash
 az login
 az account set --subscription "<your-subscription-id>"
 ```
 
-### 4. Run the scan
+### 5. Run the scan
 
 ```bash
 python scan_unused.py --subscription-id "<your-subscription-id>"
@@ -87,7 +101,7 @@ python scan_unused.py --subscription-id "<your-subscription-id>"
 
 This produces a JSON file: `unused_resources_<timestamp>.json`
 
-### 5. Generate the visual report
+### 6. Generate the visual report
 
 ```bash
 python generate_report.py unused_resources_<timestamp>.json
@@ -95,7 +109,7 @@ python generate_report.py unused_resources_<timestamp>.json
 
 This produces a self-contained HTML file: `unused_resources_<timestamp>.html`
 
-### 6. Email subscription owners
+### 7. Email subscription owners
 
 1. Open the HTML report in your browser
 2. Enter the resource owner's email address in the **Owner Email** input box
