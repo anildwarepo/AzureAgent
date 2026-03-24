@@ -1,0 +1,15 @@
+# Exclude files not needed in container
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.git/
+.gitignore
+.vscode/
+*.ipynb
+*.md
+.dockerignore
+uv.lock
+evaluation_data.jsonl
