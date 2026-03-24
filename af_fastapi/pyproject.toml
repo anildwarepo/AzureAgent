@@ -1,0 +1,57 @@
+[project]
+name = "microsoftagentframework"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "agent-framework==1.0.0b251108",
+    "agent-framework-core==1.0.0b251108",
+    "azure-ai-projects",
+    "python-dotenv",
+    "ipykernel",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "psycopg-binary",
+
+    # HTTP stack
+    "httpx[socks,http2]>=0.28,<0.29",
+    "httpx-sse>=0.4.1",
+
+    # If you stick with httpx-sse, you can drop this requests-based SSE client:
+    # "sseclient-py",
+
+    "requests",
+    "aiohttp",              # (deduped)
+
+    # Azure
+    "azure-cosmos",
+    "azure-identity",
+    "azure-servicebus==7.12.3",
+
+    # Config & utils
+    "python-dotenv",
+    "isodate",
+
+    # Dapr & DB
+    "dapr-ext-fastapi",
+    "psycopg",
+    "psycopg_pool",
+
+    # MCP tools
+    "mcp[cli]",
+
+    # JWT validation (Entra ID tokens)
+    "pyjwt>=2.8.0",
+    "cryptography>=42.0.0",
+
+    "openai",
+
+    # Pin opentelemetry-semantic-conventions-ai to <0.5 — v0.5 removed
+    # SpanAttributes.LLM_REQUEST_MODEL which agent-framework 1.0.0b251108 uses.
+    "opentelemetry-semantic-conventions-ai>=0.4.1,<0.5.0",
+]
+
+# Safer to omit prereleases globally. Remove this block, or set to disallow.
+[tool.uv]
+prerelease = "allow"

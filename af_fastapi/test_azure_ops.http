@@ -1,0 +1,63 @@
+### Health check
+GET http://localhost:8080/health
+
+### SSE events (open in browser or curl)
+# curl -N http://localhost:8080/events?sid=test-user-123
+
+### List subscriptions (requires auth)
+GET http://localhost:8080/subscriptions
+Authorization: Bearer {{azure_token}}
+
+### Chat - Ask about resources
+POST http://localhost:8080/chat
+Content-Type: application/json
+Authorization: Bearer {{azure_token}}
+
+{
+    "message": "What resources do I have in my subscription?",
+    "subscription_id": "{{subscription_id}}"
+}
+
+### Chat - Cost analysis
+POST http://localhost:8080/chat
+Content-Type: application/json
+Authorization: Bearer {{azure_token}}
+
+{
+    "message": "Show me a cost breakdown by resource group for the last 30 days and generate a visual report",
+    "subscription_id": "{{subscription_id}}"
+}
+
+### Chat - Find unused resources
+POST http://localhost:8080/chat
+Content-Type: application/json
+Authorization: Bearer {{azure_token}}
+
+{
+    "message": "Find all orphaned and unused resources in my subscription and generate a report",
+    "subscription_id": "{{subscription_id}}"
+}
+
+### Chat - Resource health
+POST http://localhost:8080/chat
+Content-Type: application/json
+Authorization: Bearer {{azure_token}}
+
+{
+    "message": "Check the health status of all my resources",
+    "subscription_id": "{{subscription_id}}"
+}
+
+### Chat - Dashboard
+POST http://localhost:8080/chat
+Content-Type: application/json
+Authorization: Bearer {{azure_token}}
+
+{
+    "message": "Generate a comprehensive dashboard of my Azure environment showing resources, costs, and health",
+    "subscription_id": "{{subscription_id}}"
+}
+
+### Clear chat history
+POST http://localhost:8080/chat/clear
+Authorization: Bearer {{azure_token}}
