@@ -70,6 +70,11 @@ const QUICK_QUESTIONS = [
   "Show cost breakdown by resource group for last 30 days",
   "Check the health of all my resources",
   "Generate a dashboard of my Azure environment",
+  "What policies are assigned to my subscription?",
+  "Show policy compliance status for my subscription",
+  "Create a policy that denies public IP addresses on my resource group",
+  "Create a policy to restrict deployments to East US only",
+  "Find unused resources and email the resource owners about them",
 ];
 
 // â”€â”€â”€ Main App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -225,6 +230,9 @@ export default function App() {
             if (!rm) continue;
 
             if (rm.type === "AgentRunUpdateEvent" && rm.delta) {
+              fullText += rm.delta;
+              setStreamingText(fullText);
+            } else if (rm.type === "ExecutorInvokedEvent" && rm.delta) {
               fullText += rm.delta;
               setStreamingText(fullText);
             } else if (rm.type === "done") {

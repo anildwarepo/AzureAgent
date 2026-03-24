@@ -37,7 +37,7 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from agent_framework import ChatMessage
-from azure_ops_agent import AzureOpsAgent, ResponseMessage, _ndjson
+from azure_ops_orchestrator import AzureOpsOrchestrator, ResponseMessage, _ndjson
 from azure_ops_auth import decode_and_validate_bearer
 from azure_ops_sse_bus import SESSIONS, associate_user_session
 
@@ -164,7 +164,7 @@ async def chat(
 
     session_manager.append(user_id, "user", user_msg)
 
-    agent = AzureOpsAgent()
+    agent = AzureOpsOrchestrator()
 
     async def safe_stream():
         try:

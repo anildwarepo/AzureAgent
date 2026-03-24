@@ -64,6 +64,19 @@ from report_tools import (
     generate_cost_report,
     generate_dashboard_report,
 )
+from email_tools import (
+    send_resource_email,
+    send_custom_email,
+)
+from policy_tools import (
+    list_policy_assignments,
+    get_policy_definition,
+    get_policy_compliance,
+    list_policy_definitions,
+    generate_policy_definition,
+    generate_deny_public_ip_policy,
+    generate_allowed_locations_policy,
+)
 from report_store import get_report
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -83,8 +96,9 @@ monitor, manage, query, and analyze their Azure resources. The user's Azure
 bearer token is automatically injected from HTTP headers — you do not need to
 provide a token parameter. Start with list_subscriptions or get_subscription_info
 to establish context, then use resource graph tools for discovery, monitoring tools
-for metrics and health, cost tools for financial analysis, and report tools for
-visualizations.""",
+for metrics and health, cost tools for financial analysis, report tools for
+visualizations, email tools for sending resource notifications, and policy tools
+for querying and authoring Azure Policy assignments and definitions.""",
 )
 
 # ---------------------------------------------------------------------------
@@ -130,6 +144,23 @@ mcp.tool(get_advisor_recommendations)
 mcp.tool(generate_resource_report)
 mcp.tool(generate_cost_report)
 mcp.tool(generate_dashboard_report)
+
+# ---------------------------------------------------------------------------
+# Email Notification tools
+# ---------------------------------------------------------------------------
+mcp.tool(send_resource_email)
+mcp.tool(send_custom_email)
+
+# ---------------------------------------------------------------------------
+# Azure Policy tools
+# ---------------------------------------------------------------------------
+mcp.tool(list_policy_assignments)
+mcp.tool(get_policy_definition)
+mcp.tool(get_policy_compliance)
+mcp.tool(list_policy_definitions)
+mcp.tool(generate_policy_definition)
+mcp.tool(generate_deny_public_ip_policy)
+mcp.tool(generate_allowed_locations_policy)
 
 
 # ---------------------------------------------------------------------------
