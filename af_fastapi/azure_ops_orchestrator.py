@@ -274,12 +274,24 @@ class AzureOpsOrchestrator:
                     # Workflow complete
                     pass
 
-            # Extract report_id from the agent's text output
+            # Extract report_id from the agent's text output.
+            # Matches: [report_id=XXXXX], report_id: XXXXX, report ID: XXXXX, report ID XXXXX
             report_id = None
-            report_match = re.search(r'\[report_id=([a-f0-9]+)\]', output)
-            if report_match:
-                report_id = report_match.group(1)
-                output = output.replace(report_match.group(0), "").strip()
+            report_patterns = [
+                r'\[report_id=([a-f0-9]+)\]',
+                r'report[_ ]id[:\s]+([a-f0-9]{8,})',
+                r'report ID[:\s]+([a-f0-9]{8,})',
+                r'referencing report ID[:\s]+([a-f0-9]{8,})',
+            ]
+            for pattern in report_patterns:
+                report_match = re.search(pattern, output, re.IGNORECASE)
+                if report_match:
+                    report_id = report_match.group(1)
+                    break
+
+            # Clean all report_id markers/mentions from visible text
+            if report_id:
+                output = re.sub(r'\[report_id=[a-f0-9]+\]', '', output).strip()
 
             chat_history.append(ChatMessage(role="assistant", text=output))
 
