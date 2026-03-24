@@ -1,0 +1,21 @@
+# Exclude files not needed in container
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+.env.*
+.git/
+.gitignore
+.vscode/
+*.ipynb
+*.md
+!CYPHER_QUERY_GENERATION_AGENT_GENERIC.md
+!CYPHER_QUERY_VALIDATION_AGENT_GENERIC.md
+!ORCHESTRATION_MANAGER_INSTRUCTIONS.md
+!TASK_LEDGER_FULL_PROMPT.md
+.dockerignore
+uv.lock
+test.http

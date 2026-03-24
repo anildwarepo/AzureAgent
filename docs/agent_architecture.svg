@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 820" font-family="Segoe UI, -apple-system, Arial, sans-serif">
+  <defs>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="108%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="gSpa" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="gApi" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="gMcp" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <linearGradient id="gAzure" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0078d4"/><stop offset="100%" stop-color="#50a0e6"/>
+    </linearGradient>
+
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="820" rx="12" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="480" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Azure Operations Agent — Architecture</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!--  1. REACT SPA (port 3000)                                        -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="56" width="840" height="110" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+    <!-- Header bar -->
+    <rect x="60" y="56" width="840" height="32" rx="10" fill="url(#gSpa)"/>
+    <rect x="60" y="78" width="840" height="10" fill="url(#gSpa)"/>
+    <text x="480" y="78" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">React SPA · port 3000</text>
+    <!-- Feature pills -->
+    <rect x="100" y="100" width="156" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="178" y="118" text-anchor="middle" font-size="12" fill="#1e40af">🔐  Entra ID (MSAL)</text>
+
+    <rect x="280" y="100" width="140" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="350" y="118" text-anchor="middle" font-size="12" fill="#1e40af">💬  Chat Interface</text>
+
+    <rect x="444" y="100" width="150" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="519" y="118" text-anchor="middle" font-size="12" fill="#1e40af">📊  Dashboard View</text>
+
+    <rect x="618" y="100" width="142" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="689" y="118" text-anchor="middle" font-size="12" fill="#1e40af">📋  Sub Picker</text>
+
+    <rect x="784" y="100" width="96" height="28" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="832" y="118" text-anchor="middle" font-size="12" fill="#1e40af">📃  Reports</text>
+  </g>
+
+  <!-- Arrow SPA → API -->
+  <line x1="480" y1="166" x2="480" y2="194" stroke="#64748b" stroke-width="2"/>
+  <polygon points="480,204 474,192 486,192" fill="#64748b"/>
+  <rect x="490" y="172" width="220" height="18" rx="4" fill="#f8fafc"/>
+  <text x="600" y="186" text-anchor="middle" font-size="10" fill="#64748b">Bearer Token · NDJSON Streaming</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!--  2. FASTAPI BACKEND (port 8080)                                  -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="204" width="840" height="196" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+    <!-- Header bar -->
+    <rect x="60" y="204" width="840" height="32" rx="10" fill="url(#gApi)"/>
+    <rect x="60" y="226" width="840" height="10" fill="url(#gApi)"/>
+    <text x="480" y="226" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">FastAPI Backend · port 8080</text>
+
+    <!-- Capability pills -->
+    <rect x="100" y="248" width="126" height="26" rx="6" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="163" y="265" text-anchor="middle" font-size="11" fill="#5b21b6">JWT Validation</text>
+
+    <rect x="242" y="248" width="120" height="26" rx="6" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="302" y="265" text-anchor="middle" font-size="11" fill="#5b21b6">Chat Sessions</text>
+
+    <rect x="378" y="248" width="110" height="26" rx="6" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="433" y="265" text-anchor="middle" font-size="11" fill="#5b21b6">SSE Events</text>
+
+    <rect x="504" y="248" width="150" height="26" rx="6" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="579" y="265" text-anchor="middle" font-size="11" fill="#5b21b6">NDJSON Streaming</text>
+
+    <rect x="670" y="248" width="200" height="26" rx="6" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="770" y="265" text-anchor="middle" font-size="11" fill="#5b21b6">DefaultAzureCredential</text>
+
+    <!-- Agent Framework box (dashed) -->
+    <rect x="100" y="290" width="760" height="96" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5" stroke-dasharray="6 3"/>
+    <text x="480" y="310" text-anchor="middle" font-size="13" font-weight="600" fill="#6d28d9">Microsoft Agent Framework — Handoff Orchestrator</text>
+
+    <!-- Triage Agent pill -->
+    <rect x="160" y="324" width="136" height="30" rx="15" fill="#7c3aed"/>
+    <text x="228" y="343" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Triage Agent</text>
+
+    <!-- Azure Ops Agent pill (top right) -->
+    <rect x="480" y="316" width="170" height="28" rx="14" fill="#8b5cf6"/>
+    <text x="565" y="334" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Azure Ops Agent</text>
+
+    <!-- Policy Agent pill (bottom right) -->
+    <rect x="480" y="352" width="170" height="28" rx="14" fill="#a78bfa"/>
+    <text x="565" y="370" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Policy Agent</text>
+
+    <!-- Arrow Triage → Azure Ops Agent -->
+    <line x1="296" y1="335" x2="470" y2="330" stroke="#7c3aed" stroke-width="1.5"/>
+    <polygon points="480,330 468,324 468,336" fill="#7c3aed"/>
+
+    <!-- Arrow Triage → Policy Agent -->
+    <line x1="296" y1="345" x2="470" y2="366" stroke="#7c3aed" stroke-width="1.5"/>
+    <polygon points="480,366 468,360 468,372" fill="#7c3aed"/>
+
+    <!-- "OR" label between the two arrows -->
+    <text x="388" y="352" text-anchor="middle" font-size="9" font-weight="600" fill="#7c3aed">OR</text>
+
+    <!-- Handoff labels on each arrow -->
+    <text x="400" y="326" text-anchor="middle" font-size="8" fill="#7c3aed">handoff</text>
+    <text x="400" y="374" text-anchor="middle" font-size="8" fill="#7c3aed">handoff</text>
+  </g>
+
+  <!-- Arrow API → MCP -->
+  <line x1="480" y1="400" x2="480" y2="428" stroke="#64748b" stroke-width="2"/>
+  <polygon points="480,438 474,426 486,426" fill="#64748b"/>
+  <rect x="490" y="406" width="290" height="18" rx="4" fill="#f8fafc"/>
+  <text x="635" y="420" text-anchor="middle" font-size="10" fill="#64748b">MCP Streamable HTTP · Bearer Token Pass-through</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!--  3. MCP SERVER (port 3001)                                       -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="438" width="840" height="226" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+    <!-- Header bar -->
+    <rect x="60" y="438" width="840" height="32" rx="10" fill="url(#gMcp)"/>
+    <rect x="60" y="460" width="840" height="10" fill="url(#gMcp)"/>
+    <text x="480" y="460" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">MCP Server · port 3001</text>
+
+    <!-- Sub-header -->
+    <text x="480" y="488" text-anchor="middle" font-size="11" fill="#065f46">FastMCP  ·  Azure Token Middleware  ·  Report Store</text>
+
+    <!-- Tool grid: 3 columns × 3 rows -->
+    <!-- Col 1 -->
+    <rect x="90" y="504" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="205" y="526" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">📦  Resource Graph Tools</text>
+    <rect x="90" y="548" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="205" y="570" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">🔧  Resource Mgmt Tools</text>
+    <rect x="90" y="592" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="205" y="614" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">📧  Email Tools</text>
+
+    <!-- Col 2 -->
+    <rect x="365" y="504" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="480" y="526" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">📈  Monitoring Tools</text>
+    <rect x="365" y="548" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="480" y="570" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">📃  Report Tools</text>
+    <rect x="365" y="592" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="480" y="614" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">🗂️  Report Store</text>
+
+    <!-- Col 3 -->
+    <rect x="640" y="504" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="755" y="526" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">💰  Cost Mgmt Tools</text>
+    <rect x="640" y="548" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="755" y="570" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">🛡️  Policy Tools</text>
+    <rect x="640" y="592" width="230" height="36" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="755" y="614" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">🆔  Azure Auth Helper</text>
+
+    <!-- Tiny detail labels -->
+    <text x="205" y="540" text-anchor="middle" font-size="8" fill="#6b7280">list · query KQL · summary · orphans</text>
+    <text x="205" y="584" text-anchor="middle" font-size="8" fill="#6b7280">details · VMs · tags · subscriptions</text>
+    <text x="205" y="626" text-anchor="middle" font-size="8" fill="#6b7280">send_resource_email · send_custom_email</text>
+    <text x="480" y="540" text-anchor="middle" font-size="8" fill="#6b7280">metrics · health · activity · alerts · idle</text>
+    <text x="480" y="584" text-anchor="middle" font-size="8" fill="#6b7280">resource · cost · dashboard reports</text>
+    <text x="480" y="626" text-anchor="middle" font-size="8" fill="#6b7280">in-memory store · GET /reports/{id}</text>
+    <text x="755" y="540" text-anchor="middle" font-size="8" fill="#6b7280">summary · by RG · by service · budgets</text>
+    <text x="755" y="584" text-anchor="middle" font-size="8" fill="#6b7280">assignments · compliance · authoring</text>
+    <text x="755" y="626" text-anchor="middle" font-size="8" fill="#6b7280">BearerTokenCredential · ContextVar</text>
+  </g>
+
+  <!-- Arrow MCP → Azure -->
+  <line x1="480" y1="664" x2="480" y2="692" stroke="#64748b" stroke-width="2"/>
+  <polygon points="480,702 474,690 486,690" fill="#64748b"/>
+  <rect x="490" y="672" width="240" height="18" rx="4" fill="#f8fafc"/>
+  <text x="610" y="686" text-anchor="middle" font-size="10" fill="#64748b">Azure REST APIs (user's Bearer token)</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!--  4. AZURE APIs                                                   -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <g filter="url(#shadow)">
+    <rect x="130" y="702" width="700" height="80" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+    <!-- Header bar -->
+    <rect x="130" y="702" width="700" height="32" rx="10" fill="url(#gAzure)"/>
+    <rect x="130" y="724" width="700" height="10" fill="url(#gAzure)"/>
+    <text x="480" y="724" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">Azure APIs</text>
+
+    <!-- Service pills -->
+    <rect x="156" y="742" width="112" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="212" y="757" text-anchor="middle" font-size="10" fill="#1e40af">Resource Graph</text>
+
+    <rect x="280" y="742" width="78" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="319" y="757" text-anchor="middle" font-size="10" fill="#1e40af">Monitor</text>
+
+    <rect x="370" y="742" width="56" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="398" y="757" text-anchor="middle" font-size="10" fill="#1e40af">ARM</text>
+
+    <rect x="438" y="742" width="100" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="488" y="757" text-anchor="middle" font-size="10" fill="#1e40af">Cost Mgmt</text>
+
+    <rect x="550" y="742" width="64" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="582" y="757" text-anchor="middle" font-size="10" fill="#1e40af">Policy</text>
+
+    <rect x="626" y="742" width="72" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="662" y="757" text-anchor="middle" font-size="10" fill="#1e40af">Advisor</text>
+
+    <rect x="710" y="742" width="96" height="22" rx="4" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="758" y="757" text-anchor="middle" font-size="10" fill="#1e40af">Graph Mail</text>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!--  TOKEN FLOW ANNOTATION (right sidebar)                           -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <line x1="928" y1="80" x2="928" y2="742" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.6"/>
+  <!-- Arrow head at bottom -->
+  <polygon points="928,748 924,738 932,738" fill="#2563eb" opacity="0.7"/>
+  <text x="924" y="68" text-anchor="end" font-size="11" font-weight="700" fill="#2563eb">Token Flow ▼</text>
+
+  <text x="940" y="130" font-size="9" fill="#3b82f6" writing-mode="tb">Sign in → Acquire token</text>
+  <text x="940" y="310" font-size="9" fill="#3b82f6" writing-mode="tb">Forward Bearer token</text>
+  <text x="940" y="530" font-size="9" fill="#3b82f6" writing-mode="tb">Inject into Azure SDKs</text>
+  <text x="940" y="720" font-size="9" fill="#3b82f6" writing-mode="tb">Call on behalf of user</text>
+
+  <!-- Footer -->
+  <text x="480" y="808" text-anchor="middle" font-size="10" fill="#94a3b8">Azure Operations Agent</text>
+</svg>

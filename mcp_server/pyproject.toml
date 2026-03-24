@@ -1,0 +1,19 @@
+[project]
+name = "azure-ops-mcp-server"
+version = "0.1.0"
+description = "MCP Server for Azure Operations Agent - provides tools for monitoring, managing, querying, and analyzing Azure resources"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=2.0.0",
+    "azure-identity>=1.15.0",
+    "azure-mgmt-resourcegraph>=8.0.0",
+    "azure-mgmt-monitor>=6.0.0",
+    "azure-mgmt-resource>=23.0.0",
+    "azure-core>=1.30.0",
+    "httpx>=0.27,<0.29",
+    "uvicorn[standard]>=0.29",
+]
+
+[tool.uv]
+prerelease = "allow"

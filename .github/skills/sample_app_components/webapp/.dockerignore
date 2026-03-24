@@ -1,0 +1,10 @@
+# Exclude files not needed in container
+node_modules/
+.git/
+.gitignore
+.vscode/
+*.md
+.env
+.env.*
+dist/
+.dockerignore

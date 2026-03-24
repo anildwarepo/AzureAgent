@@ -1,324 +1,551 @@
-# Azure Unused Resource Scanner
+# Azure Operations Agent
 
-> Automatically discover unused, idle, and orphaned resources across your Azure subscription — then visualize findings in an interactive dashboard and email resource owners to take action.
+An interactive AI-powered agent for monitoring, managing, and analyzing Azure resources through a chat interface and visual dashboards. Built with **Microsoft Agent Framework**, **MCP (Model Context Protocol)**, **FastAPI**, and **React**.
 
-![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue) ![Azure CLI](https://img.shields.io/badge/Azure%20CLI-required-0078D4) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Component Overview](#component-overview)
+- [Prerequisites](#prerequisites)
+- [Azure Setup](#azure-setup)
+  - [1. Entra ID App Registration](#1-entra-id-app-registration)
+  - [2. Azure OpenAI Deployment](#2-azure-openai-deployment)
+  - [3. Azure RBAC Permissions](#3-azure-rbac-permissions)
+- [Configuration](#configuration)
+  - [Backend API (.env)](#backend-api-env)
+  - [React SPA (authConfig.js)](#react-spa-authconfigjs)
+- [Installation & Running](#installation--running)
+  - [Quick Start (All Services)](#quick-start-all-services)
+  - [Manual Start (Individual Services)](#manual-start-individual-services)
+- [Verifying the Setup](#verifying-the-setup)
+- [Usage Guide](#usage-guide)
+  - [Chat Interface](#chat-interface)
+  - [Dashboard View](#dashboard-view)
+  - [Example Questions](#example-questions)
+- [API Reference](#api-reference)
+- [Docker Deployment](#docker-deployment)
+- [Project Structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Overview
 
-Azure subscriptions accumulate unused resources over time — deallocated VMs, unattached disks, orphaned NICs, idle databases, and more. These forgotten resources silently increase your monthly Azure bill.
+The Azure Operations Agent lets you interact with your Azure environment using natural language. Ask questions about your resources, costs, health, and compliance — the agent queries Azure APIs in real time and returns answers with rich visual reports.
 
-**Azure Unused Resource Scanner** solves this by running a multi-phase detection pipeline:
+![alt text](docs/image.png)
 
-| Phase | Method | What It Detects |
-|-------|--------|-----------------|
-| **Phase 0** | `azqr` CLI scan | Full resource inventory, Azure Advisor cost items, Azure Orphan Resources (AOR) rules |
-| **Phase 1** | Azure Resource Graph | Deallocated VMs, unattached disks, orphaned NICs, unassociated public IPs/NSGs, empty App Service Plans & Load Balancers |
-| **Phase 2** | Azure Monitor metrics (30-day) | Zero-transaction storage accounts, idle databases, unused Cognitive Services, quiet Event Hubs, and 16 resource types total |
-| **Phase 3** | Activity logs (90-day) | Last-touch timestamp and caller for ML workspaces, Databricks, and all flagged resources |
+**Key capabilities:**
 
-### Resource Classifications
-
-Each finding is classified based on evidence:
-
-| Classification | Meaning | Example |
-|---------------|---------|---------|
-| **UNUSED** | Confirmed not running | VM deallocated for 60+ days |
-| **IDLE** | Running but zero activity | Storage account with 0 transactions in 30 days |
-| **ORPHANED** | Detached from parent resource | NIC not attached to any VM |
-| **REVIEW** | Cannot determine programmatically | ML workspace with no recent activity log entries |
+| Capability | Description |
+|---|---|
+| **Resource Discovery** | List and search Azure resources using Resource Graph (KQL) |
+| **Monitoring** | Query metrics, check resource health, review activity logs, detect idle resources |
+| **Cost Analysis** | Cost summaries, breakdowns by resource group/service/resource, budgets, Advisor recommendations |
+| **Resource Management** | VM operations (start/stop/restart/deallocate), tag management, subscription listing |
+| **Azure Policy** | List policy assignments, check compliance, author custom policy definitions |
+| **Reporting** | Generate interactive HTML dashboards, resource reports, and cost visualizations |
+| **Email Notifications** | Send resource findings to subscription owners or specific recipients |
 
 ---
 
 ## Architecture
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Architecture Diagram" width="960"/>
+  <img src="docs/agent_architecture.svg" alt="Architecture Diagram" width="960"/>
 </p>
+
+**Token flow:** User signs in via Entra ID in the SPA → SPA acquires an Azure Management token → token is forwarded through the API layer to the MCP server → each MCP tool uses the token to call Azure APIs on behalf of the user.
+
+---
+
+## Component Overview
+
+| Component | Directory | Port | Technology | Purpose |
+|---|---|---|---|---|
+| **React SPA** | `azure-agent-spa/` | 3000 | React 19, MSAL | User interface: chat, dashboards, auth |
+| **FastAPI Backend** | `af_fastapi/` | 8080 | FastAPI, Agent Framework | API layer: JWT validation, agent orchestration, NDJSON streaming |
+| **MCP Server** | `mcp_server/` | 3001 | FastMCP, Azure SDKs | Tool server: Azure API integrations |
 
 ---
 
 ## Prerequisites
 
-| Requirement | Install |
-|-------------|---------|
-| **Python 3.10+** | [python.org](https://www.python.org/downloads/) |
-| **Azure CLI** | [Install Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) |
-| **azqr CLI** (optional but recommended) | [github.com/Azure/azqr](https://github.com/Azure/azqr) |
-| **Azure permissions** | Reader role on the target subscription |
+| Requirement | Version | Install |
+|---|---|---|
+| **Python** | 3.12+ | [python.org](https://www.python.org/downloads/) |
+| **uv** | Latest | `pip install uv` or [docs.astral.sh/uv](https://docs.astral.sh/uv/) |
+| **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) |
+| **npm** | 9+ | Included with Node.js |
+| **Azure CLI** | Latest | [Install Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) |
+| **Git** | Latest | [git-scm.com](https://git-scm.com/) |
+
+Verify installations:
+
+```powershell
+python --version    # Python 3.12+
+uv --version        # uv 0.x.x
+node --version      # v18+
+npm --version       # 9+
+az --version        # Azure CLI 2.x
+```
 
 ---
 
-## Quick Start
+## Azure Setup
 
-### 1. Clone the repo
+### 1. Entra ID App Registration
 
-```bash
-git clone https://github.com/<your-org>/AzureAgent.git
+You need an App Registration in Microsoft Entra ID to authenticate users and acquire Azure Management tokens.
+
+1. Go to [Azure Portal → Microsoft Entra ID → App registrations](https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps)
+2. Click **New registration**
+   - **Name:** `Azure Operations Agent`
+   - **Supported account types:** Accounts in this organizational directory only (Single tenant)
+   - **Redirect URI:** Select **Single-page application (SPA)** and set `http://localhost:3000`
+3. After creation, note the following values:
+   - **Application (client) ID** — needed for `AZURE_CLIENT_ID` and SPA `authConfig.js`
+   - **Directory (tenant) ID** — needed for `AZURE_TENANT_ID` and SPA `authConfig.js`
+4. Under **API permissions**, add:
+   - **Azure Service Management** → `user_impersonation` (Delegated)
+5. Click **Grant admin consent** for your organization
+
+### 2. Azure OpenAI Deployment
+
+The agent uses Azure OpenAI for its LLM. You need an Azure OpenAI (or Azure AI Foundry) resource with a deployed model.
+
+1. Create an [Azure OpenAI resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI) or use [Azure AI Foundry](https://ai.azure.com)
+2. Deploy a model (recommended: `gpt-4.1` or `gpt-4o`)
+3. Note:
+   - **Endpoint URL** (e.g., `https://your-resource.cognitiveservices.azure.com/` or `https://your-resource.openai.azure.com/`)
+   - **Deployment name** (e.g., `gpt-4.1`)
+   - **API key** (if not using managed identity)
+
+**Authentication options for Azure OpenAI:**
+- **Managed Identity / Azure CLI (recommended):** Login with `az login`. The backend uses `DefaultAzureCredential` automatically.
+- **API Key:** Set `AZURE_OPENAI_API_KEY` in the `.env` file.
+
+### 3. Azure RBAC Permissions
+
+The signed-in user needs appropriate Azure RBAC roles on the subscriptions they want to manage:
+
+| Role | Purpose |
+|---|---|
+| **Reader** | List resources, query Resource Graph, view metrics, view costs |
+| **Contributor** | All Reader permissions + VM operations, tag management |
+| **Cost Management Reader** | View cost and billing data |
+| **Resource Policy Contributor** | List and manage Azure Policy assignments |
+
+At minimum, **Reader** is required to use most features.
+
+---
+
+## Configuration
+
+### Backend API (.env)
+
+The FastAPI backend reads configuration from `af_fastapi/.env.azure_ops` (which is copied to `.env` at startup by `run.ps1`).
+
+Create or edit `af_fastapi/.env.azure_ops`:
+
+```env
+# Azure OpenAI / AI Foundry
+AZURE_AI_PROJECT_ENDPOINT=https://<your-ai-foundry-resource>.services.ai.azure.com/api/projects/<project-name>
+AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-4.1
+AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=gpt-4.1
+AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME=gpt-4.1
+AZURE_OPENAI_ENDPOINT=https://<your-openai-resource>.cognitiveservices.azure.com/
+
+# (Optional) API key — omit if using az login / managed identity
+# AZURE_OPENAI_API_KEY=your-api-key-here
+
+# Entra ID (must match your App Registration)
+AZURE_TENANT_ID=<your-tenant-id>
+AZURE_CLIENT_ID=<your-client-id>
+
+# MCP Server endpoint
+MCP_ENDPOINT=http://localhost:3001/mcp
+
+# CORS origins (comma-separated)
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
+A sample file is available at `af_fastapi/.env.sample`.
+
+### React SPA (authConfig.js)
+
+Edit `azure-agent-spa/src/authConfig.js` with your App Registration values:
+
+```javascript
+export const msalConfig = {
+  auth: {
+    clientId: "<your-client-id>",                                          // Application (client) ID
+    authority: "https://login.microsoftonline.com/<your-tenant-id>",       // Directory (tenant) ID
+    redirectUri: window.location.origin,
+  },
+  cache: {
+    cacheLocation: "sessionStorage",
+    storeAuthStateInCookie: false,
+  },
+};
+
+export const azureManagementLoginRequest = {
+  scopes: ["https://management.azure.com/user_impersonation"],
+};
+```
+
+---
+
+## Installation & Running
+
+### Quick Start (All Services)
+
+The included `run.ps1` script launches all three services in separate PowerShell windows:
+
+```powershell
+# 1. Clone the repo
+git clone <repo-url>
 cd AzureAgent
-```
 
-### 2. Create a Python virtual environment
-
-```bash
-python -m venv .venv
-```
-
-Activate it:
-
-| OS | Command |
-|----|---------|
-| **Windows (PowerShell)** | `.venv\Scripts\Activate.ps1` |
-| **Windows (CMD)** | `.venv\Scripts\activate.bat` |
-| **macOS / Linux** | `source .venv/bin/activate` |
-
-### 3. Install Python dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-This installs:
-- `azure-identity` — Azure authentication (DefaultAzureCredential)
-- `azure-mgmt-resourcegraph` — Resource Graph queries
-- `azure-mgmt-monitor` — Metrics and activity log access
-- `azure-mgmt-resource` — Resource management client
-
-### 4. Authenticate to Azure
-
-```bash
+# 2. Login to Azure (for DefaultAzureCredential)
 az login
-az account set --subscription "<your-subscription-id>"
+
+# 3. Configure environment (see Configuration section above)
+#    Edit af_fastapi/.env.azure_ops
+#    Edit azure-agent-spa/src/authConfig.js
+
+# 4. Launch all services
+.\run.ps1
 ```
 
-### 5. Run the scan
+This starts:
+- **MCP Server** on `http://localhost:3001`
+- **FastAPI Backend** on `http://localhost:8080`
+- **React SPA** on `http://localhost:3000`
 
-```bash
-python scan_unused.py --subscription-id "<your-subscription-id>"
+Open `http://localhost:3000` in your browser and sign in with your Microsoft account.
+
+### Manual Start (Individual Services)
+
+If you prefer to start each service individually (useful for debugging):
+
+#### 1. MCP Server (Terminal 1)
+
+```powershell
+cd mcp_server
+
+# Install dependencies (first time only)
+uv pip install -e .
+
+# Start the server
+uv run python azure_ops_mcp_server.py --port 3001
 ```
 
-This produces a JSON file: `unused_resources_<timestamp>.json`
+Verify: `http://localhost:3001/mcp` should be available.
 
-### 6. Generate the visual report
+#### 2. FastAPI Backend (Terminal 2)
 
-```bash
-python generate_report.py unused_resources_<timestamp>.json
+```powershell
+cd af_fastapi
+
+# Copy env config
+Copy-Item .env.azure_ops .env -Force
+
+# Install dependencies (first time only)
+uv pip install -e .
+
+# Start the server
+uv run uvicorn azure_ops_api:app --port 8080 --reload
 ```
 
-This produces a self-contained HTML file: `unused_resources_<timestamp>.html`
+Verify: `http://localhost:8080/health` should return `{"ok": true, ...}`.
 
-### 7. Email subscription owners
+#### 3. React SPA (Terminal 3)
 
-1. Open the HTML report in your browser
-2. Enter the resource owner's email address in the **Owner Email** input box
-3. **Per-resource:** Click any **EMAIL OWNER** badge in the table to compose an email for that specific resource
-4. **Bulk email:** Click the **EMAIL OWNER** segment in the *Recommended Actions* donut chart to compose a single email listing **all** flagged resources
+```powershell
+cd azure-agent-spa
+
+# Install dependencies (first time only)
+npm install
+
+# Start the dev server
+npm start
+```
+
+The React app opens automatically at `http://localhost:3000`.
 
 ---
 
-## Scanner Options
+## Verifying the Setup
 
-```
-python scan_unused.py --subscription-id <sub-id> [OPTIONS]
+After all three services are running:
 
-Options:
-  --subscription-id   Azure subscription ID (required)
-  --filters           Path to azqr filter YAML (default: filters.yaml)
-  --azqr-file         Use an existing azqr JSON output instead of running a new scan
-  --skip-azqr         Skip azqr entirely; use Resource Graph for inventory
-  --output            Custom output file path (default: unused_resources_<timestamp>.json)
-```
-
-**Examples:**
-
-```bash
-# Full scan with azqr + all phases
-python scan_unused.py --subscription-id "e4718866-4e88-411f-a0b8-10c8051dc165"
-
-# Reuse an existing azqr scan file
-python scan_unused.py --subscription-id "e4718866-4e88-411f-a0b8-10c8051dc165" \
-    --azqr-file azqr_action_plan_2026_03_16_T084304.json
-
-# Skip azqr, rely on Resource Graph for inventory
-python scan_unused.py --subscription-id "e4718866-4e88-411f-a0b8-10c8051dc165" --skip-azqr
-
-# Custom output path
-python scan_unused.py --subscription-id "e4718866-4e88-411f-a0b8-10c8051dc165" --output my_report.json
-```
+| Check | URL / Command | Expected Result |
+|---|---|---|
+| MCP Server is running | `http://localhost:3001/mcp` | MCP endpoint responds |
+| Backend is healthy | `http://localhost:8080/health` | `{"ok": true, "pod": "...", "rev": "v0.1"}` |
+| SPA is running | `http://localhost:3000` | Login page appears |
+| Auth works | Click "Sign in with Microsoft" | Redirects to Microsoft login |
+| Token acquired | After login, no "consent required" banner | Chat interface is visible |
+| End-to-end | Type "Show me a summary of all my Azure resources" | Agent returns resource summary |
 
 ---
 
-## Report Generator Options
+## Usage Guide
 
-```
-python generate_report.py <input-json> [OPTIONS]
+### Chat Interface
 
-Options:
-  input               Path to unused_resources JSON file (required)
-  --output            Custom output HTML file path (default: same name with .html extension)
-```
+The chat view is the primary interface. Type natural language questions about your Azure environment:
 
----
+1. **Sign in** — Click "Sign in with Microsoft" on the login page
+2. **Select subscription** — Use the dropdown in the sidebar (auto-populated from your accessible subscriptions)
+3. **Ask questions** — Type in the chat box or click a Quick Question from the sidebar
+4. **View reports** — When the agent generates a visual report, it appears embedded in the chat with an option to open in a new tab
 
-## Interactive Dashboard Features
+### Dashboard View
 
-The generated HTML report is a fully self-contained, dark-themed dashboard.
+Click **Dashboard** in the sidebar to view the most recently generated dashboard report. Ask the agent to "Generate a dashboard of my Azure environment" to create one.
 
-**[View Sample Report](https://anildwarepo.github.io/AzureAgent/docs/sample_report.html)**
+### Example Questions
 
-- **Summary cards** — Total inventory, scanned, unused, idle, orphaned, needs review, skipped
-- **Findings by Classification** — Donut chart (UNUSED, IDLE, ORPHANED, REVIEW)
-- **Findings by Resource Type** — Horizontal bar chart
-- **Findings by Resource Group** — Horizontal bar chart
-- **Recommended Actions** — Clickable donut chart; click EMAIL OWNER to bulk-email all items
-- **Filterable data table** — Filter by classification, search across all columns, sortable, paginated
-- **EMAIL OWNER badges** — Click to compose a mailto: with resource details pre-filled
+**Resource Discovery:**
+- "Show me a summary of all my Azure resources"
+- "List all VMs in my subscription"
+- "Find all orphaned and unused resources"
 
----
+**Cost Analysis:**
+- "What are my top 10 most expensive resources?"
+- "Show cost breakdown by resource group for last 30 days"
+- "What Azure Advisor cost recommendations do I have?"
 
-## Email Workflow
+**Monitoring & Health:**
+- "Check the health of all my resources"
+- "Show me CPU metrics for my VMs"
+- "Are there any idle resources wasting money?"
 
-The report supports two email workflows — no SMTP server or API keys required:
+**Policy & Compliance:**
+- "What policies are assigned to my subscription?"
+- "Show policy compliance status"
+- "Create a policy that denies public IP addresses"
+- "Create a policy to restrict deployments to East US only"
 
-### Per-Resource Email
-1. Enter the owner's email in the input box at the top of the table
-2. Click any **EMAIL OWNER** badge on a table row
-3. Your default email client opens with a pre-composed message containing:
-   - Resource name, type, resource group
-   - Status and reason for flagging
-   - Scan date
-
-### Bulk Email (All Flagged Resources)
-1. Enter the owner's email in the input box
-2. Click the **EMAIL OWNER** segment in the Recommended Actions donut chart
-3. A single email is composed with a numbered list of every EMAIL OWNER resource
+**Reporting & Email:**
+- "Generate a dashboard of my Azure environment"
+- "Generate a cost report for last month"
+- "Find unused resources and email the resource owners"
 
 ---
 
-## Detection Coverage
+## API Reference
 
-### Phase 1 — Resource Graph (instant, property-based)
+The FastAPI backend exposes the following endpoints:
 
-| Resource Type | Detection Rule |
-|---------------|---------------|
-| Virtual Machines | `powerState != 'running'` (deallocated/stopped) |
-| Managed Disks | `managedBy` is empty (unattached) |
-| Public IP Addresses | `ipConfiguration` is empty (unassociated) |
-| Network Interfaces | `virtualMachine` is empty (orphaned) |
-| Network Security Groups | No attached NICs or subnets |
-| NAT Gateways | No attached subnets |
-| App Service Plans | `numberOfSites == 0` (empty) |
-| Load Balancers | No backend pools |
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| `GET` | `/health` | Health check | None |
+| `POST` | `/chat` | Send a chat message, stream NDJSON response | Bearer token |
+| `POST` | `/chat/clear` | Clear chat history for current user | Bearer token |
+| `GET` | `/events?sid={session_id}` | SSE event stream for real-time notifications | None |
+| `GET` | `/subscriptions` | List accessible Azure subscriptions | Bearer token |
 
-### Phase 2 — Monitor Metrics (30-day lookback, parallel)
-
-| Resource Type | Metric(s) Checked |
-|---------------|-------------------|
-| Storage Accounts | Transactions |
-| SQL Databases | cpu_percent, dtu_consumption_percent |
-| PostgreSQL Flexible Servers | active_connections, cpu_percent |
-| Cosmos DB | TotalRequests |
-| Event Hubs | IncomingMessages, OutgoingMessages |
-| Service Bus | IncomingMessages, OutgoingMessages |
-| Cognitive Services | TotalCalls |
-| Container Registries | TotalPullCount, TotalPushCount |
-| Key Vaults | ServiceApiHit |
-| Application Insights | requestsCount |
-| API Management | TotalRequests |
-| Data Factory | PipelineSucceededRuns, PipelineFailedRuns |
-| Azure Search | SearchQueriesPerSecond |
-| Kusto (Data Explorer) | QueryCount, IngestionResult |
-| Container Apps | Requests |
-| VPN Gateways | TunnelIngressBytes, TunnelEgressBytes |
-
-### Phase 3 — Activity Logs (90-day lookback)
-
-| Resource Type | What It Checks |
-|---------------|---------------|
-| ML Workspaces | Management operations in activity log |
-| Databricks Workspaces | Management operations in activity log |
-| All flagged resources | Last caller + timestamp enrichment |
-
----
-
-## Filters Configuration
-
-The `filters.yaml` file controls which azqr sections are included/excluded:
-
-```yaml
-includeSections:
-  - Costs
-  - Advisor
-  - Inventory
-  - Orphaned
-excludeSections:
-  - Recommendations
-  - AzurePolicy
-  - DefenderRecommendations
-```
-
----
-
-## Output Schema
-
-The scanner produces a JSON file with this structure:
+### Chat Request
 
 ```json
+POST /chat
+Authorization: Bearer <azure-management-token>
+Content-Type: application/json
+
 {
-  "scanDate": "2026-03-16T20:19:26+00:00",
-  "subscriptionId": "e4718866-...",
-  "azqrFile": "azqr_action_plan_2026_03_16_T084304.json",
-  "summary": {
-    "totalInventory": 325,
-    "scanned": 187,
-    "unused": 2,
-    "idle": 0,
-    "orphaned": 19,
-    "review": 12,
-    "skipped": 138
-  },
-  "findings": [
-    {
-      "resourceId": "/subscriptions/.../virtualMachines/linuxdevvm",
-      "resourceName": "linuxdevvm",
-      "resourceType": "microsoft.compute/virtualmachines",
-      "resourceGroup": "vm",
-      "classification": "UNUSED",
-      "reason": "VM deallocated",
-      "recommendation": "DELETE",
-      "evidence": {
-        "source": "phase1-property",
-        "lastActivity": "2026-01-15T22:42:32+00:00"
-      }
-    }
-  ]
+    "message": "What resources do I have?",
+    "subscription_id": "00000000-0000-0000-0000-000000000000"
 }
 ```
 
+### Chat Response (NDJSON stream)
+
+Each line is a JSON object:
+
+```json
+{"response_message": {"type": "AgentRunUpdateEvent", "delta": "Let me check..."}}
+{"response_message": {"type": "AgentRunUpdateEvent", "delta": " your resources."}}
+{"response_message": {"type": "done", "result": "Full response text", "report_id": "abc123def456"}}
+```
+
+The MCP Server also serves generated reports at:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/reports/{report_id}` | Retrieve a generated HTML report |
+
 ---
 
-## Files
+## Docker Deployment
 
-| File | Description |
-|------|-------------|
-| `scan_unused.py` | Multi-phase unused resource scanner (Python) |
-| `generate_report.py` | Interactive HTML dashboard generator |
-| `requirements.txt` | Python dependencies |
-| `filters.yaml` | azqr scan filter configuration |
-| `unused-resource-scanner.instructions.md` | Copilot agent instructions for automated scanning |
+### MCP Server
+
+```bash
+cd mcp_server
+docker build -t azure-ops-mcp-server .
+docker run -p 3001:3001 azure-ops-mcp-server
+```
+
+### FastAPI Backend
+
+```bash
+cd af_fastapi
+docker build -t azure-ops-api .
+docker run -p 8080:8080 \
+  -e AZURE_TENANT_ID=<tenant-id> \
+  -e AZURE_CLIENT_ID=<client-id> \
+  -e AZURE_OPENAI_ENDPOINT=<endpoint> \
+  -e AZURE_OPENAI_API_KEY=<key> \
+  -e MCP_ENDPOINT=http://mcp-server:3001/mcp \
+  azure-ops-api
+```
+
+### React SPA
+
+```bash
+cd azure-agent-spa
+npm run build
+# Serve the build/ folder with any static file server (nginx, Azure Static Web Apps, etc.)
+```
 
 ---
 
-## Copilot Agent Integration
+## Project Structure
 
-This repo includes `unused-resource-scanner.instructions.md` — agent instructions for GitHub Copilot that enable it to run the full scan workflow as an AI agent. The instructions cover:
+```
+AzureAgent/
+├── run.ps1                         # Launch all 3 services locally
+├── README.md                       # This file
+│
+├── azure-agent-spa/                # React SPA (UI Layer)
+│   ├── package.json                # Dependencies (React 19, MSAL)
+│   ├── public/
+│   │   └── index.html              # HTML entry point
+│   └── src/
+│       ├── index.js                # App bootstrap, MSAL initialization
+│       ├── App.js                  # Main app: chat, dashboard, auth flow
+│       ├── App.css                 # Styling
+│       └── authConfig.js           # Entra ID / MSAL configuration
+│
+├── af_fastapi/                     # FastAPI Backend (API Layer + Agent)
+│   ├── pyproject.toml              # Python dependencies (uv)
+│   ├── Dockerfile                  # Container build
+│   ├── .env.azure_ops              # Environment config (template)
+│   ├── .env.sample                 # Minimal env sample
+│   ├── azure_ops_api.py            # FastAPI routes (/chat, /health, /events)
+│   ├── azure_ops_auth.py           # Entra ID JWT validation
+│   ├── azure_ops_orchestrator.py   # Handoff orchestrator (triage → ops/policy agents)
+│   ├── azure_ops_agent.py          # Single-agent implementation (alternative)
+│   ├── azure_ops_mcp_client.py     # MCP client for direct tool invocation
+│   ├── azure_ops_sse_bus.py        # SSE session manager for real-time events
+│   ├── test_azure_ops.http         # HTTP test requests (VS Code REST Client)
+│   └── shared/
+│       └── models.py               # Shared Pydantic models
+│
+├── mcp_server/                     # MCP Server (Tool Layer)
+│   ├── pyproject.toml              # Python dependencies (uv)
+│   ├── Dockerfile                  # Container build
+│   ├── README.md                   # MCP server documentation
+│   ├── azure_ops_mcp_server.py     # Server entry point, tool registration
+│   ├── azure_auth.py               # Token middleware + BearerTokenCredential
+│   ├── resource_graph_tools.py     # Azure Resource Graph queries
+│   ├── monitoring_tools.py         # Azure Monitor metrics, health, alerts
+│   ├── resource_tools.py           # ARM resource management, VMs, tags
+│   ├── cost_tools.py               # Cost Management API queries
+│   ├── policy_tools.py             # Azure Policy tools
+│   ├── report_tools.py             # HTML report generation
+│   ├── report_store.py             # In-memory report storage
+│   └── email_tools.py              # Email notification tools
+│
+├── extra/                          # Standalone scanner & utilities
+│   ├── scan_unused.py              # Azure unused resource scanner
+│   ├── generate_report.py          # Report generator for scanner findings
+│   └── README.md                   # Scanner documentation
+│
+├── docs/                           # Documentation & samples
+│   └── sample_report.html          # Example generated report
+│
+└── sample_app_components/          # Reference implementations
+    ├── af_fastapi/                 # Sample Agent Framework patterns
+    ├── mcp_server/                 # Sample MCP server patterns
+    └── webapp/                     # Sample web app patterns
+```
 
-- Running azqr scans with proper filters
-- Resource-to-strategy mapping for 35+ Azure resource types
-- Classification rules and thresholds
-- Report generation and interpretation
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**"Missing Authorization: Bearer token" when chatting**
+- The SPA failed to acquire an Azure Management token. Check:
+  - `clientId` and `authority` in `authConfig.js` match your App Registration
+  - API permission `Azure Service Management → user_impersonation` is granted with admin consent
+  - Try signing out and signing in again
+
+**"Token validation failed" (401 from backend)**
+- `AZURE_TENANT_ID` and `AZURE_CLIENT_ID` in `.env.azure_ops` must match the App Registration
+- The backend validates the token issuer and audience — ensure the token is for `https://management.azure.com`
+
+**"Agent execution failed" or no response**
+- Check the FastAPI terminal for errors
+- Verify `AZURE_OPENAI_ENDPOINT` and model deployment name are correct
+- If using DefaultAzureCredential, ensure `az login` was completed successfully
+- If using an API key, set `AZURE_OPENAI_API_KEY` in `.env.azure_ops`
+
+**MCP Server connection refused**
+- Ensure the MCP server is running on port 3001
+- Check `MCP_ENDPOINT` in `.env.azure_ops` is set to `http://localhost:3001/mcp`
+
+**CORS errors in the browser console**
+- `ALLOWED_ORIGINS` in `.env.azure_ops` must include the SPA origin (default: `http://localhost:3000`)
+
+**"Consent required" banner in the SPA**
+- Click the "Grant consent" button in the banner
+- Or grant admin consent in the Azure Portal under App Registration → API permissions
+
+**Port already in use**
+- `run.ps1` automatically stops processes on ports 3000, 3001, and 8080 before starting
+- To manually stop: `Get-NetTCPConnection -LocalPort 3001 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`
+
+**Python dependency issues**
+- The project uses `uv` for dependency management. If you encounter conflicts:
+  ```powershell
+  cd mcp_server
+  uv pip install --system --prerelease=allow -r pyproject.toml
+  ```
+- Agent Framework requires `opentelemetry-semantic-conventions-ai>=0.4.1,<0.5.0`
+
+### Logs
+
+- **MCP Server logs:** Visible in the MCP Server terminal window (INFO level by default)
+- **FastAPI Backend logs:** Visible in the FastAPI terminal (`uvicorn.error` logger)
+- **React SPA:** Browser dev tools console (F12)
+
+### Testing the Backend API
+
+Use the included `af_fastapi/test_azure_ops.http` file with the [VS Code REST Client extension](https://marketplace.visualstudio.com/items?itemName=humao.rest-client):
+
+```http
+### Health check
+GET http://localhost:8080/health
+
+### Chat (replace {{azure_token}} with a real token)
+POST http://localhost:8080/chat
+Authorization: Bearer {{azure_token}}
+Content-Type: application/json
+
+{
+    "message": "What resources do I have?",
+    "subscription_id": "{{subscription_id}}"
+}
+```
 
 ---
 

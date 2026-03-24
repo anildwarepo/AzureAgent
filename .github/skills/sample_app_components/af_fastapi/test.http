@@ -1,0 +1,10 @@
+
+GET http://localhost:8080/status 
+
+POST http://localhost:8080/conversation/44b40f48-ba73-4594-8f06-c5f8b5376c24?mode=magentic
+Content-Type: application/json
+
+{"user_query": "How many meetings did Mayor Larry Klein attend in 2022?", "graph_name": "meetings_graph"}
+
+###
+GET http://localhost:8080/get_faqs
