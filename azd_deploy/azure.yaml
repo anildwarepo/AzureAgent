@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: azure-mcp-server
+metadata:
+  template: azure-mcp-server@0.0.1-beta
+
+infra:
+  provider: bicep
+  path: ./infra
+
+hooks:
+  preprovision:
+    windows:
+      shell: pwsh
+      run: ./hooks/preprovision.ps1
+    posix:
+      shell: sh
+      run: ./hooks/preprovision.sh
+  postprovision:
+    windows:
+      shell: pwsh
+      run: ./hooks/postprovision.ps1
+    posix:
+      shell: sh
+      run: ./hooks/postprovision.sh
+
+# Map Bicep outputs to azd environment variables
+outputs:
+  AZURE_RESOURCE_GROUP: AZURE_RESOURCE_GROUP
+  accountName: accountName
+  accountEndpoint: accountEndpoint
+  vnetId: vnetId
+  vnetName: vnetName
+  acrName: acrName
+  acrLoginServer: acrLoginServer
+  mcpServerImageName: mcpServerImageName
+  mcpServerImageTag: mcpServerImageTag
+  mcpServerFullImageName: mcpServerFullImageName
+  buildMcpServerContainer: buildMcpServerContainer
+  fastApiImageName: fastApiImageName
+  fastApiImageTag: fastApiImageTag
+  fastApiFullImageName: fastApiFullImageName
+  buildFastApiContainer: buildFastApiContainer
+  webappImageName: webappImageName
+  webappImageTag: webappImageTag
+  webappFullImageName: webappFullImageName
+  buildWebappContainer: buildWebappContainer
+  containerAppsEnvName: containerAppsEnvName
+  containerAppsEnvDefaultDomain: containerAppsEnvDefaultDomain
+  mcpServerContainerAppName: mcpServerContainerAppName
+  mcpServerContainerAppFqdn: mcpServerContainerAppFqdn
+  fastApiContainerAppName: fastApiContainerAppName
+  fastApiContainerAppFqdn: fastApiContainerAppFqdn
+  webappContainerAppName: webappContainerAppName
+  webappContainerAppFqdn: webappContainerAppFqdn

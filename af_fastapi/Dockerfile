@@ -30,4 +30,4 @@ EXPOSE 8080
 ENV PYTHONUNBUFFERED=1
 
 # Run the FastAPI application (without --reload for production)
-CMD ["uvicorn", "af_fastapi:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "azure_ops_api:app", "--host", "0.0.0.0", "--port", "8080"]

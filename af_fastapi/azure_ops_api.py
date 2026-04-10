@@ -69,6 +69,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
     subscription_id: str | None = None
+    image: str | None = None  # base64 data URI, e.g. "data:image/png;base64,..."
 
 
 # ── Per-session chat history ──
@@ -82,8 +83,13 @@ class ChatSessionManager:
     def get_history(self, user_id: str) -> List[ChatMessage]:
         return self._sessions.setdefault(user_id, [])
 
-    def append(self, user_id: str, role: str, content: str) -> None:
-        self.get_history(user_id).append(ChatMessage(role=role, text=content))
+    def append(self, user_id: str, role: str, content: str, image_uri: str | None = None) -> None:
+        if image_uri:
+            from agent_framework import TextContent, DataContent
+            contents = [TextContent(text=content), DataContent(uri=image_uri)]
+            self.get_history(user_id).append(ChatMessage(role=role, contents=contents))
+        else:
+            self.get_history(user_id).append(ChatMessage(role=role, text=content))
 
     def clear(self, user_id: str) -> None:
         self._sessions.pop(user_id, None)
@@ -162,7 +168,7 @@ async def chat(
     if req.subscription_id and not history:
         user_msg = f"[Subscription ID: {req.subscription_id}]\n\n{req.message}"
 
-    session_manager.append(user_id, "user", user_msg)
+    session_manager.append(user_id, "user", user_msg, image_uri=req.image)
 
     agent = AzureOpsOrchestrator()
 

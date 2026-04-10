@@ -59,6 +59,12 @@ MCP_SERVER_URL = os.getenv("MCP_ENDPOINT", "http://localhost:3001/mcp")
 TRIAGE_INSTRUCTIONS = """You are an Azure Operations Triage Agent. Your role is to route user questions to the appropriate specialist agent.
 
 ## Routing Rules
+- **Quota listing/discovery questions** → call handoff_to_quota_list_agent
+  Examples: list quotas, show quota limits, what quota do I have, available quota, check quota for H100/GPU/VM family
+- **Quota increase/request questions** → call handoff_to_quota_request_agent
+  Examples: increase quota, request more vCPUs, create quota request, raise quota limit
+- **Support ticket questions** → call handoff_to_support_agent
+  Examples: create support ticket, open a case, list my support tickets, check ticket status, add communication to ticket, file a support request
 - **Policy questions** → call handoff_to_policy_agent
   Examples: policy assignments, policy compliance, create/author a policy, deny public IP, restrict regions/locations, governance, policy definitions
 - **Everything else** → call handoff_to_azure_ops_agent
@@ -66,10 +72,10 @@ TRIAGE_INSTRUCTIONS = """You are an Azure Operations Triage Agent. Your role is 
 
 ## Guidelines
 1. Analyze the user's question and route to the correct agent on the FIRST turn.
-2. If the question is ambiguous, lean toward azure_ops_agent unless it clearly mentions "policy", "compliance", "governance", "enforce", or "restrict".
+2. If the question is ambiguous, lean toward azure_ops_agent unless it clearly mentions "policy", "compliance", "governance", "enforce", "restrict", "quota", "support ticket", or "support case".
 3. Do NOT answer the question yourself — always hand off to a specialist.
 4. Handle only one handoff per user question.
-5. Do not answer questions outside of Azure Operations or Azure Policy domains — if it's not about Azure resources, costs, monitoring, or policy, you can respond with "Sorry, I can only help with Azure Operations questions." and end the conversation.
+5. ALL of these are valid Azure Operations topics: resources, costs, monitoring, quotas, support tickets, support cases, and policy. Always route them — never refuse.
 """
 
 AZURE_OPS_INSTRUCTIONS = """You are an Azure Operations Agent that helps users monitor, manage, query, and analyze their Azure resources.
@@ -126,6 +132,85 @@ You have access to Azure Policy tools provided by the Azure Operations MCP serve
 8. If the question is not about Azure Policy, call handoff_to_azure_ops_agent.
 """
 
+QUOTA_LIST_AGENT_INSTRUCTIONS = """You are an Azure Quota Listing Agent that helps users discover current quota limits for Azure resource providers.
+
+You have access to quota tools provided by the Azure Operations MCP server.
+
+## Capabilities
+- **List Quota Limits**: List all current quotas for a provider (Microsoft.Compute, Microsoft.Network, Microsoft.MachineLearningServices) in a specific region
+- **Get Single Quota**: Get the current limit and usage for a specific quota resource
+
+## Important Guidelines
+1. When a user asks about quotas, ALWAYS use list_quota_limits first to discover the exact quota resource names.
+2. The resource names must be EXACT — e.g. 'StandardNCadsH100v5Family' not 'h100' or 'standard_nh96ads_h100_v5'.
+3. Common providers: Microsoft.Compute (VMs, vCPUs), Microsoft.Network (IPs, NICs, VNets), Microsoft.MachineLearningServices (ML compute).
+4. Present results clearly showing: resource name, display name, current limit, whether quota increase is applicable.
+5. Filter results to show only relevant quotas when the user asks about a specific VM family or resource type.
+6. For GPU/HPC quota questions, search for the relevant family name in Microsoft.Compute quotas.
+7. The user's Azure token is automatically injected — you do not need to supply a token parameter.
+8. After listing quotas, if the user wants to increase one, call handoff_to_quota_request_agent with the exact resource name and current limit.
+9. **CRITICAL: When report tools return a report_id, include it like this: [report_id=XXXXX].**
+"""
+
+QUOTA_REQUEST_AGENT_INSTRUCTIONS = """You are an Azure Quota Request Agent that submits quota increase requests on behalf of users.
+
+You have access to quota tools provided by the Azure Operations MCP server.
+
+## Capabilities
+- **Create Quota Request**: Submit a quota increase request via the Azure Quota REST API
+- **Check Request Status**: Get the status of a previously submitted quota request
+- **List Request History**: View past quota requests and their outcomes
+
+## Important Guidelines
+1. ALWAYS call list_quota_limits or get_quota_limit FIRST to verify the exact resource_name before submitting a request.
+   - Never guess the resource name. The Quota API requires exact names like 'StandardNCadsH100v5Family'.
+   - If the user says 'H100', search the Compute quotas to find the matching family name.
+2. Before submitting, confirm with the user:
+   - The exact resource name and its current limit
+   - The requested new limit value
+   - The subscription, provider, and region
+3. When calling create_quota_request, use the EXACT resource_name from the list/get response.
+4. After submission, report the result:
+   - If 200: Quota was updated immediately
+   - If 202: Request was accepted and is being processed — provide the request ID for tracking
+   - If 401/403: Explain the auth/permission issue from the error details
+5. For tracking, use get_quota_request_status with the request ID from the create response.
+6. The user's Azure token is automatically injected — you do not need to supply a token parameter.
+7. Prerequisites for quota requests:
+   - Microsoft.Quota resource provider must be registered on the subscription
+   - User must have the 'Quota Request Operator' role
+   - User must be MFA-authenticated (tenant policy may enforce this)
+8. **CRITICAL: When report tools return a report_id, include it like this: [report_id=XXXXX].**
+"""
+
+SUPPORT_AGENT_INSTRUCTIONS = """You are an Azure Support Request Agent that helps users create, view, update, and manage Azure support tickets.
+
+You have access to support tools provided by the Azure Operations MCP server.
+
+## Capabilities
+- **Discover Services**: List available Azure support services and their problem classifications
+- **List Tickets**: List support tickets with filtering by status, date, service
+- **Get Ticket Details**: Get full details of a specific support ticket
+- **Create Tickets**: Create technical, billing, subscription management, or quota support tickets
+- **Update Tickets**: Update severity, status, or contact details on existing tickets
+- **Communications**: List and add communications/messages on support tickets
+
+## Important Guidelines
+1. To create a support ticket, you MUST first discover the correct serviceId and problemClassificationId:
+   - Call list_support_services to get available services
+   - Call list_problem_classifications with the chosen serviceId to get problem categories
+   - Use the exact IDs returned from these calls
+2. When creating a ticket, always gather from the user:
+   - Title and detailed description of the issue
+   - Contact information (name, email)
+   - Severity level (minimal, moderate, critical)
+   - For technical issues: the affected Azure resource ID
+3. After creating a ticket, report the ticket name and ID for tracking.
+4. When listing tickets, offer to filter by status (Open, Closed, Updating).
+5. The user's Azure token is automatically injected — you do not need to supply a token parameter.
+6. **CRITICAL: When report tools return a report_id, include it like this: [report_id=XXXXX].**
+7. If the question is not about support tickets, hand off to the appropriate agent.
+"""
 
 # ---------------------------------------------------------------------------
 # Streaming helpers
@@ -228,15 +313,45 @@ class AzureOpsOrchestrator:
             tools=azure_ops_mcp,
         )
 
+        # Quota list agent — discover current quota limits
+        quota_list_agent = ChatAgent(
+            name="quota_list_agent",
+            description="Azure Quota Listing Agent for discovering current quota limits by provider and region.",
+            instructions=QUOTA_LIST_AGENT_INSTRUCTIONS,
+            chat_client=chat_client_factory(),
+            tools=azure_ops_mcp,
+        )
+
+        # Quota request agent — submit quota increase requests
+        quota_request_agent = ChatAgent(
+            name="quota_request_agent",
+            description="Azure Quota Request Agent for submitting quota increase requests.",
+            instructions=QUOTA_REQUEST_AGENT_INSTRUCTIONS,
+            chat_client=chat_client_factory(),
+            tools=azure_ops_mcp,
+        )
+
+        # Support agent — create, list, update support tickets and communications
+        support_agent = ChatAgent(
+            name="support_agent",
+            description="Azure Support Request Agent for creating, viewing, updating support tickets and managing communications.",
+            instructions=SUPPORT_AGENT_INSTRUCTIONS,
+            chat_client=chat_client_factory(),
+            tools=azure_ops_mcp,
+        )
+
         # Build workflow with handoff pattern
         self._workflow = (
             HandoffBuilder(
-                participants=[triage_agent, azure_ops_agent, policy_agent]
+                participants=[triage_agent, azure_ops_agent, policy_agent, quota_list_agent, quota_request_agent, support_agent]
             )
             .set_coordinator(triage_agent)
-            .add_handoff(triage_agent, [azure_ops_agent, policy_agent])
-            .add_handoff(azure_ops_agent, [policy_agent])
+            .add_handoff(triage_agent, [azure_ops_agent, policy_agent, quota_list_agent, quota_request_agent, support_agent])
+            .add_handoff(azure_ops_agent, [policy_agent, quota_list_agent, quota_request_agent, support_agent])
             .add_handoff(policy_agent, [azure_ops_agent])
+            .add_handoff(quota_list_agent, [quota_request_agent, azure_ops_agent, support_agent])
+            .add_handoff(quota_request_agent, [quota_list_agent, azure_ops_agent, support_agent])
+            .add_handoff(support_agent, [azure_ops_agent])
             .with_termination_condition(
                 lambda conv: sum(1 for msg in conv if msg.role.value == "user") > 6
             )
