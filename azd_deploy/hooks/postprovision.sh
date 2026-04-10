@@ -14,7 +14,7 @@ fi
 
 MCP_SERVER_PATH="${1:-../../mcp_server}"
 FASTAPI_PATH="${2:-../../af_fastapi}"
-WEBAPP_PATH="${3:-../../webapp}"
+WEBAPP_PATH="${3:-../../azure-agent-spa}"
 
 get_azd_env() {
   azd env get-value "$1" 2>/dev/null | tr -d '\r'

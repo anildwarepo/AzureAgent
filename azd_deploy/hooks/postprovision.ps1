@@ -6,7 +6,7 @@
 param(
     [string]$McpServerPath = "../../mcp_server",
     [string]$FastApiPath = "../../af_fastapi",
-    [string]$WebappPath = "../../webapp"
+    [string]$WebappPath = "../../azure-agent-spa"
 )
 
 $ErrorActionPreference = "Stop"
@@ -546,16 +546,19 @@ if ($buildFastApiContainer -ne "false") {
 
 if ($buildWebappContainer -ne "false") {
     $webappFullPath = Resolve-Path (Join-Path $scriptDir $WebappPath)
-    # Copy SPA source into webapp build context so Docker can access it.
+    # Copy SPA source into webapp build context so Docker can access it
+    # (skip if webapp path already IS the SPA source).
     $spaSourcePath = Resolve-Path (Join-Path $scriptDir "../../azure-agent-spa")
-    Write-Host "Copying SPA source from $spaSourcePath into $webappFullPath..."
-    $spaFiles = @("package.json", "package-lock.json", "public", "src")
-    foreach ($item in $spaFiles) {
-        $src = Join-Path $spaSourcePath $item
-        if (Test-Path $src) {
-            $dest = Join-Path $webappFullPath $item
-            if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
-            Copy-Item -Path $src -Destination $dest -Recurse -Force
+    if ($webappFullPath.Path -ne $spaSourcePath.Path) {
+        Write-Host "Copying SPA source from $spaSourcePath into $webappFullPath..."
+        $spaFiles = @("package.json", "package-lock.json", "public", "src")
+        foreach ($item in $spaFiles) {
+            $src = Join-Path $spaSourcePath $item
+            if (Test-Path $src) {
+                $dest = Join-Path $webappFullPath $item
+                if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+                Copy-Item -Path $src -Destination $dest -Recurse -Force
+            }
         }
     }
     Write-Host "Checking if Webapp container needs building..."
