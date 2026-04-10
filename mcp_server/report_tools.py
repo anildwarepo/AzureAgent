@@ -14,6 +14,18 @@ from typing import Annotated
 
 from report_store import store_report
 
+_CHART_PALETTE = [
+    '#6366f1', '#7c83f7', '#939bfa', '#a5b4fc', '#b8c4fd',
+    '#4f7df5', '#6990f7', '#83a3f9', '#9db6fb', '#b7c9fd',
+    '#3b82f6', '#5294f8', '#69a6fa', '#80b8fc', '#97cafe',
+    '#2563eb', '#3d75ed', '#5587ef', '#6d99f1', '#85abf3',
+]
+
+
+def _pick_colors(n: int) -> list[str]:
+    """Return *n* colors from the palette, cycling if needed."""
+    return [_CHART_PALETTE[i % len(_CHART_PALETTE)] for i in range(n)]
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,6 +100,7 @@ async def generate_resource_report(
 
     type_counts = dict(sorted(type_counts.items(), key=lambda x: x[1], reverse=True))
     rg_counts = dict(sorted(rg_counts.items(), key=lambda x: x[1], reverse=True)[:15])
+    type_colors_json = json.dumps(_pick_colors(len(type_counts)))
 
     cls_colors = {
         "UNUSED": "#e74c3c", "IDLE": "#f39c12", "ORPHANED": "#e67e22",
@@ -267,7 +280,7 @@ async def generate_resource_report(
 <script>
 Chart.defaults.color='#8b8fa3';Chart.defaults.borderColor='#2a2d3a';
 new Chart(document.getElementById('clsChart'),{{type:'doughnut',data:{{labels:{json.dumps(list(classification_counts.keys()))},datasets:[{{data:{json.dumps(list(classification_counts.values()))},backgroundColor:{json.dumps([cls_colors.get(k,'#95a5a6') for k in classification_counts.keys()])},borderWidth:0}}]}},options:{{responsive:true,cutout:'60%',plugins:{{legend:{{position:'right'}}}}}}}});
-new Chart(document.getElementById('typeChart'),{{type:'bar',data:{{labels:{json.dumps(list(type_counts.keys()))},datasets:[{{data:{json.dumps(list(type_counts.values()))},backgroundColor:'#6366f1',borderRadius:6,barThickness:20}}]}},options:{{responsive:true,indexAxis:'y',plugins:{{legend:{{display:false}}}}}}}});
+new Chart(document.getElementById('typeChart'),{{type:'bar',data:{{labels:{json.dumps(list(type_counts.keys()))},datasets:[{{data:{json.dumps(list(type_counts.values()))},backgroundColor:{type_colors_json},borderRadius:6,barThickness:20}}]}},options:{{responsive:true,indexAxis:'y',plugins:{{legend:{{display:false}}}}}}}});
 new Chart(document.getElementById('rgChart'),{{type:'bar',data:{{labels:{json.dumps(list(rg_counts.keys()))},datasets:[{{data:{json.dumps(list(rg_counts.values()))},backgroundColor:'#a78bfa',borderRadius:6,barThickness:20}}]}},options:{{responsive:true,indexAxis:'y',plugins:{{legend:{{display:false}}}}}}}});
 new Chart(document.getElementById('recChart'),{{type:'doughnut',data:{{labels:{json.dumps(list(recommendation_counts.keys()))},datasets:[{{data:{json.dumps(list(recommendation_counts.values()))},backgroundColor:['#e74c3c','#f39c12','#3498db','#2ecc71','#9b59b6','#95a5a6'],borderWidth:0}}]}},options:{{responsive:true,cutout:'60%',plugins:{{legend:{{position:'right'}}}}}}}});
 let tbl=$('#findingsTable').DataTable({{pageLength:25,order:[[0,'asc']]}});
@@ -523,6 +536,9 @@ async def generate_dashboard_report(
     loc_labels = [l.get("location", "") for l in by_location[:10]]
     loc_values = [l.get("count_", 0) for l in by_location[:10]]
 
+    type_colors_json = json.dumps(_pick_colors(len(type_labels)))
+    loc_colors_json = json.dumps(_pick_colors(len(loc_labels)))
+
     cost_total = cost.get("total_cost", 0) if cost else 0
     cost_currency = cost.get("currency", "USD") if cost else "USD"
 
@@ -602,8 +618,8 @@ async def generate_dashboard_report(
 </div>
 <script>
 Chart.defaults.color='#8b8fa3';Chart.defaults.borderColor='#2a2d3a';
-new Chart(document.getElementById('typeChart'),{{type:'bar',data:{{labels:{json.dumps(type_labels)},datasets:[{{data:{json.dumps(type_values)},backgroundColor:'#6366f1',borderRadius:6,barThickness:20}}]}},options:{{responsive:true,indexAxis:'y',plugins:{{legend:{{display:false}}}}}}}});
-new Chart(document.getElementById('locChart'),{{type:'doughnut',data:{{labels:{json.dumps(loc_labels)},datasets:[{{data:{json.dumps(loc_values)},backgroundColor:['#6366f1','#818cf8','#a78bfa','#c4b5fd','#3498db','#2ecc71','#f39c12','#e74c3c','#9b59b6','#1abc9c'],borderWidth:0}}]}},options:{{responsive:true,cutout:'55%',plugins:{{legend:{{position:'right'}}}}}}}});
+new Chart(document.getElementById('typeChart'),{{type:'bar',data:{{labels:{json.dumps(type_labels)},datasets:[{{data:{json.dumps(type_values)},backgroundColor:{type_colors_json},borderRadius:6,barThickness:20}}]}},options:{{responsive:true,indexAxis:'y',plugins:{{legend:{{display:false}}}}}}}});
+new Chart(document.getElementById('locChart'),{{type:'doughnut',data:{{labels:{json.dumps(loc_labels)},datasets:[{{data:{json.dumps(loc_values)},backgroundColor:{loc_colors_json},borderWidth:0}}]}},options:{{responsive:true,cutout:'55%',plugins:{{legend:{{position:'right'}}}}}}}});
 </script>
 </body>
 </html>"""

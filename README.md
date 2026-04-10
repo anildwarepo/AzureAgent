@@ -7,6 +7,7 @@ An interactive AI-powered agent for monitoring, managing, and analyzing Azure re
 ## Table of Contents
 
 - [Overview](#overview)
+- [Features](#features)
 - [Architecture](#architecture)
 - [Component Overview](#component-overview)
 - [Prerequisites](#prerequisites)
@@ -47,8 +48,44 @@ The Azure Operations Agent lets you interact with your Azure environment using n
 | **Cost Analysis** | Cost summaries, breakdowns by resource group/service/resource, budgets, Advisor recommendations |
 | **Resource Management** | VM operations (start/stop/restart/deallocate), tag management, subscription listing |
 | **Azure Policy** | List policy assignments, check compliance, author custom policy definitions |
+| **Quota Management** | List current quotas, request quota increases, track request status across Compute/Network/ML providers |
+| **Support Requests** | Create, list, update support tickets; manage communications; discover services and problem classifications |
 | **Reporting** | Generate interactive HTML dashboards, resource reports, and cost visualizations |
-| **Email Notifications** | Send resource findings to subscription owners or specific recipients |
+| **Email Notifications** | Send resource findings to subscription owners or specific recipients *(work in progress)* |
+| **Image Support** | Attach or paste images in chat — forwarded to the agent for multi-modal analysis |
+
+---
+
+## Features
+
+### Interactive Dashboard
+
+Generate comprehensive dashboards showing resources, costs, and health status across your Azure environment with a single question.
+
+<p align="center">
+  <img src="dashboard_image.png" alt="Azure Operations Dashboard" width="900"/>
+</p>
+
+### Quota Management
+
+View current quota limits, request increases, and track approval status for Compute (VM vCPUs/GPUs), Network, and Machine Learning resources across any region.
+
+<p align="center">
+  <img src="quota_image.png" alt="Quota Management" width="900"/>
+</p>
+
+### Multi-Agent Orchestration
+
+The agent uses a **handoff orchestration** pattern with 6 specialist agents, each focused on a specific domain:
+
+| Agent | Responsibility |
+|---|---|
+| **Triage Agent** | Analyzes user intent and routes to the correct specialist |
+| **Azure Ops Agent** | Resource discovery, monitoring, cost analysis, reports, email |
+| **Policy Agent** | Policy assignments, compliance checks, policy authoring |
+| **Quota List Agent** | Discovers quota limits by provider and region |
+| **Quota Request Agent** | Submits quota increase requests and tracks status |
+| **Support Agent** | Creates/lists/updates support tickets and communications |
 
 ---
 
@@ -331,6 +368,18 @@ Click **Dashboard** in the sidebar to view the most recently generated dashboard
 - "Show policy compliance status"
 - "Create a policy that denies public IP addresses"
 - "Create a policy to restrict deployments to East US only"
+
+**Quota Management:**
+- "List all compute quota limits in East US"
+- "What is my current quota for H100 GPUs in West US 3?"
+- "Request a quota increase for Standard NCads H100 v5 to 40 vCPUs in West US 3"
+- "Show my quota request history for Compute in East US"
+
+**Support Requests:**
+- "List my open support tickets"
+- "Show available Azure support services"
+- "Create a support ticket for a billing issue"
+- "Show communications on my latest support ticket"
 
 **Reporting & Email:**
 - "Generate a dashboard of my Azure environment"
