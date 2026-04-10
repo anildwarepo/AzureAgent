@@ -21,6 +21,10 @@ import sys
 import asyncio
 import argparse
 import logging
+import warnings
+
+# Suppress websockets deprecation from uvicorn (fixed upstream but not yet released)
+warnings.filterwarnings("ignore", message="websockets.server.WebSocketServerProtocol is deprecated")
 
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -76,6 +80,23 @@ from policy_tools import (
     generate_policy_definition,
     generate_deny_public_ip_policy,
     generate_allowed_locations_policy,
+)
+from quota_tools import (
+    list_quota_limits,
+    get_quota_limit,
+    create_quota_request,
+    get_quota_request_status,
+    list_quota_requests,
+)
+from support_tools import (
+    list_support_services,
+    list_problem_classifications,
+    list_support_tickets,
+    get_support_ticket,
+    create_support_ticket,
+    update_support_ticket,
+    list_ticket_communications,
+    add_ticket_communication,
 )
 from report_store import get_report
 
@@ -161,6 +182,27 @@ mcp.tool(list_policy_definitions)
 mcp.tool(generate_policy_definition)
 mcp.tool(generate_deny_public_ip_policy)
 mcp.tool(generate_allowed_locations_policy)
+
+# ---------------------------------------------------------------------------
+# Quota Management tools
+# ---------------------------------------------------------------------------
+mcp.tool(list_quota_limits)
+mcp.tool(get_quota_limit)
+mcp.tool(create_quota_request)
+mcp.tool(get_quota_request_status)
+mcp.tool(list_quota_requests)
+
+# ---------------------------------------------------------------------------
+# Support Request tools
+# ---------------------------------------------------------------------------
+mcp.tool(list_support_services)
+mcp.tool(list_problem_classifications)
+mcp.tool(list_support_tickets)
+mcp.tool(get_support_ticket)
+mcp.tool(create_support_ticket)
+mcp.tool(update_support_ticket)
+mcp.tool(list_ticket_communications)
+mcp.tool(add_ticket_communication)
 
 
 # ---------------------------------------------------------------------------
