@@ -95,7 +95,7 @@ The agent uses a **handoff orchestration** pattern with 6 specialist agents, eac
   <img src="docs/agent_architecture.svg" alt="Architecture Diagram" width="960"/>
 </p>
 
-**Token flow:** User signs in via Entra ID in the SPA → SPA acquires an Azure Management token → token is forwarded through the API layer to the MCP server → each MCP tool uses the token to call Azure APIs on behalf of the user.
+**Token flow:** User signs in via Entra ID in the SPA → SPA acquires a token scoped to the backend API (`api://{clientId}/access_as_user`) → backend validates the JWT and exchanges it via the **On-Behalf-Of (OBO)** flow for an Azure Management token → management token is forwarded to the MCP server → each MCP tool uses the token to call Azure APIs on behalf of the user. Azure OpenAI is accessed separately using the **backend service principal's own identity** — never with the user's delegated token.
 
 ---
 
@@ -134,40 +134,94 @@ az --version        # Azure CLI 2.x
 
 ## Azure Setup
 
-### 1. Entra ID App Registration
+> **Automated setup:** Run `.\setup-app-registration.ps1` to create the app registration, configure all permissions, assign RBAC roles, and update config files automatically. The manual steps below are for reference.
 
-You need an App Registration in Microsoft Entra ID to authenticate users and acquire Azure Management tokens.
+### Identity Architecture (Separation of Concerns)
+
+This project uses **two separate identities** with distinct responsibilities:
+
+| Identity | Purpose | Credential Type | Scope |
+|---|---|---|---|
+| **App Registration SP** (`azure-ops-agent-spa`) | Authenticates users, performs OBO token exchange, accesses Azure OpenAI | Client ID + Secret | Multi-tenant, backend-only |
+| **User's delegated token** (via OBO) | Calls Azure Management APIs (resources, cost, metrics, policy, etc.) | OBO-exchanged Bearer token | Per-user, per-tenant |
+
+**Why two identities?**
+- **Azure OpenAI** is your resource, your cost — it should always be accessed with the backend's own service principal, never with user delegation. This prevents users from needing Cognitive Services RBAC roles and keeps LLM costs centralized.
+- **Azure Management APIs** must use the user's own identity so they can only see and manage resources they have access to in their own tenant.
+
+### 1. Entra ID App Registration (Multi-Tenant)
+
+The app registration is configured as **multi-tenant** so users from any Azure AD organization can sign in.
+
+#### Automated Setup
+
+```powershell
+# Creates the app, configures SPA platform, exposes API scope, grants consent,
+# assigns OpenAI RBAC, and updates authConfig.js + .env files
+.\setup-app-registration.ps1
+
+# With custom options
+.\setup-app-registration.ps1 -AppDisplayName "my-agent" -RedirectUris @("http://localhost:3000","https://myapp.azurecontainerapps.io")
+```
+
+#### Manual Setup
 
 1. Go to [Azure Portal → Microsoft Entra ID → App registrations](https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps)
 2. Click **New registration**
-   - **Name:** `Azure Operations Agent`
-   - **Supported account types:** Accounts in this organizational directory only (Single tenant)
+   - **Name:** `azure-ops-agent-spa`
+   - **Supported account types:** Accounts in any organizational directory (Multi-tenant)
    - **Redirect URI:** Select **Single-page application (SPA)** and set `http://localhost:3000`
-3. After creation, note the following values:
-   - **Application (client) ID** — needed for `AZURE_CLIENT_ID` and SPA `authConfig.js`
-   - **Directory (tenant) ID** — needed for `AZURE_TENANT_ID` and SPA `authConfig.js`
-4. Under **API permissions**, add:
+3. After creation, note:
+   - **Application (client) ID** → `AZURE_CLIENT_ID`
+   - **Directory (tenant) ID** → `AZURE_TENANT_ID`
+4. **Set Application ID URI:**
+   - Go to **Expose an API** → Set Application ID URI to `api://{client-id}`
+5. **Set token version to v2:**
+   - Go to **Manifest** → set `"accessTokenAcceptedVersion": 2`
+   - Or via Graph API: `PATCH /applications/{objectId}` with `{"api":{"requestedAccessTokenVersion":2}}`
+6. **Add a delegated scope:**
+   - Under **Expose an API** → Add a scope:
+     - **Scope name:** `access_as_user`
+     - **Who can consent:** Admins and users
+     - **Admin consent display name:** Access as user
+7. **Add API permissions:**
    - **Azure Service Management** → `user_impersonation` (Delegated)
-5. Click **Grant admin consent** for your organization
+8. **Grant admin consent** for your organization
+9. **Pre-authorize the SPA:**
+   - Under **Expose an API** → Authorized client applications → Add your client ID with the `access_as_user` scope
+10. **Create a client secret:**
+    - Go to **Certificates & secrets** → New client secret
+    - Save the secret value → `AZURE_CLIENT_SECRET`
+11. **Create the service principal:**
+    - Run `az ad sp create --id {client-id}`
 
-### 2. Azure OpenAI Deployment
+### 2. Azure OpenAI / AI Foundry Deployment
 
-The agent uses Azure OpenAI for its LLM. You need an Azure OpenAI (or Azure AI Foundry) resource with a deployed model.
+The agent uses Azure OpenAI for its LLM, accessed with the **backend service principal's identity** (not user delegation).
 
 1. Create an [Azure OpenAI resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI) or use [Azure AI Foundry](https://ai.azure.com)
 2. Deploy a model (recommended: `gpt-4.1` or `gpt-4o`)
 3. Note:
-   - **Endpoint URL** (e.g., `https://your-resource.cognitiveservices.azure.com/` or `https://your-resource.openai.azure.com/`)
+   - **Endpoint URL** (e.g., `https://your-resource.cognitiveservices.azure.com/`)
    - **Deployment name** (e.g., `gpt-4.1`)
-   - **API key** (if not using managed identity)
+4. **Assign the `Cognitive Services OpenAI User` role** to the app registration's service principal on the OpenAI resource:
 
-**Authentication options for Azure OpenAI:**
-- **Managed Identity / Azure CLI (recommended):** Login with `az login`. The backend uses `DefaultAzureCredential` automatically.
-- **API Key:** Set `AZURE_OPENAI_API_KEY` in the `.env` file.
+   ```bash
+   # Find the service principal object ID
+   az ad sp show --id {client-id} --query id -o tsv
+
+   # Assign the role
+   az role assignment create \
+     --assignee {sp-object-id} \
+     --role "Cognitive Services OpenAI User" \
+     --scope /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/accounts/{resource-name}
+   ```
+
+   > **Important:** The backend uses `DefaultAzureCredential` which picks up `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` from the environment. This authenticates as the app's service principal — not your developer identity. The SP needs explicit RBAC on the OpenAI resource.
 
 ### 3. Azure RBAC Permissions
 
-The signed-in user needs appropriate Azure RBAC roles on the subscriptions they want to manage:
+**For the signed-in user** (Azure Management API access via OBO):
 
 | Role | Purpose |
 |---|---|
@@ -177,6 +231,31 @@ The signed-in user needs appropriate Azure RBAC roles on the subscriptions they 
 | **Resource Policy Contributor** | List and manage Azure Policy assignments |
 
 At minimum, **Reader** is required to use most features.
+
+**For the backend service principal** (Azure OpenAI access):
+
+| Role | Resource | Purpose |
+|---|---|---|
+| **Cognitive Services OpenAI User** | Azure OpenAI / Cognitive Services resource | LLM inference (completions, responses) |
+
+### 4. Multi-Tenant Configuration
+
+The app is configured for multi-tenant access. Users from **any** Azure AD organization can sign in.
+
+**How it works across tenants:**
+
+1. **SPA** uses `authority: "https://login.microsoftonline.com/common"` — users from any org can sign in
+2. **Backend** extracts the `tid` (tenant ID) claim from the incoming token and creates a tenant-specific MSAL confidential client for OBO
+3. **OBO exchange** targets `https://login.microsoftonline.com/{user's tenant}` to get a management token scoped to that user's tenant
+4. **Azure OpenAI** is always accessed with the backend SP identity (your resource, your cost) — independent of which tenant the user comes from
+
+**For external tenants:** Each tenant's admin must grant consent once via:
+
+```
+https://login.microsoftonline.com/{their-tenant-id}/adminconsent?client_id={your-client-id}
+```
+
+Or through the standard consent prompt on first login.
 
 ---
 
@@ -196,12 +275,15 @@ AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=gpt-4.1
 AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME=gpt-4.1
 AZURE_OPENAI_ENDPOINT=https://<your-openai-resource>.cognitiveservices.azure.com/
 
-# (Optional) API key — omit if using az login / managed identity
+# (Optional) API key — omit if using the app registration SP with RBAC
 # AZURE_OPENAI_API_KEY=your-api-key-here
 
 # Entra ID (must match your App Registration)
+# The backend uses these for JWT validation AND as DefaultAzureCredential
+# (EnvironmentCredential) to authenticate as the SP for Azure OpenAI access
 AZURE_TENANT_ID=<your-tenant-id>
 AZURE_CLIENT_ID=<your-client-id>
+AZURE_CLIENT_SECRET=<your-client-secret>
 
 # MCP Server endpoint
 MCP_ENDPOINT=http://localhost:3001/mcp
@@ -219,8 +301,8 @@ Edit `azure-agent-spa/src/authConfig.js` with your App Registration values:
 ```javascript
 export const msalConfig = {
   auth: {
-    clientId: "<your-client-id>",                                          // Application (client) ID
-    authority: "https://login.microsoftonline.com/<your-tenant-id>",       // Directory (tenant) ID
+    clientId: "<your-client-id>",                                     // Application (client) ID
+    authority: "https://login.microsoftonline.com/common",            // Multi-tenant: use "common"
     redirectUri: window.location.origin,
   },
   cache: {
@@ -229,8 +311,10 @@ export const msalConfig = {
   },
 };
 
+// Request a token scoped to the backend API — the backend exchanges it
+// via OBO for an Azure Management token
 export const azureManagementLoginRequest = {
-  scopes: ["https://management.azure.com/user_impersonation"],
+  scopes: ["api://<your-client-id>/access_as_user"],
 };
 ```
 
@@ -533,14 +617,26 @@ AzureAgent/
 ### Common Issues
 
 **"Missing Authorization: Bearer token" when chatting**
-- The SPA failed to acquire an Azure Management token. Check:
-  - `clientId` and `authority` in `authConfig.js` match your App Registration
-  - API permission `Azure Service Management → user_impersonation` is granted with admin consent
-  - Try signing out and signing in again
+- The SPA failed to acquire a token. Check:
+  - `clientId` in `authConfig.js` matches your App Registration
+  - `authority` is set to `https://login.microsoftonline.com/common` (multi-tenant)
+  - The scope is `api://{clientId}/access_as_user` (not `https://management.azure.com/...`)
+  - The `access_as_user` scope is exposed under **Expose an API** in the app registration
+  - Try clearing browser sessionStorage and signing in again
 
 **"Token validation failed" (401 from backend)**
 - `AZURE_TENANT_ID` and `AZURE_CLIENT_ID` in `.env.azure_ops` must match the App Registration
-- The backend validates the token issuer and audience — ensure the token is for `https://management.azure.com`
+- Ensure `accessTokenAcceptedVersion` is set to `2` in the app manifest
+- The backend validates both `api://{clientId}` and raw `{clientId}` as valid audiences
+
+**"OBO token exchange failed: AADSTS65001"**
+- Admin consent has not been granted for the Azure Service Management permission
+- Run: `az ad app permission admin-consent --id {client-id}`
+- For external tenants, admins must consent via: `https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={client-id}`
+
+**"PermissionDenied: lacks required data action Microsoft.CognitiveServices"**
+- The backend service principal needs the `Cognitive Services OpenAI User` role on the Azure OpenAI resource
+- Run: `az role assignment create --assignee {sp-object-id} --role "Cognitive Services OpenAI User" --scope {openai-resource-id}`
 
 **"Agent execution failed" or no response**
 - Check the FastAPI terminal for errors

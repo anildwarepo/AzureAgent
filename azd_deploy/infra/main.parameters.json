@@ -121,6 +121,15 @@
     },
     "azureOpenAiChatDeploymentName": {
       "value": ""
+    },
+    "entraAppClientId": {
+      "value": "${ENTRA_APP_CLIENT_ID}"
+    },
+    "entraAppClientSecret": {
+      "value": "${ENTRA_APP_CLIENT_SECRET}"
+    },
+    "azureOpenAiModel": {
+      "value": "gpt-4.1"
     }
   }
 }

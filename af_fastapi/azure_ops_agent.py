@@ -16,12 +16,12 @@ from enum import Enum
 from typing import List, Optional
 
 from agent_framework import (
-    ChatAgent,
-    ChatMessage,
-    ChatMessageStore,
+    Agent,
+    Message,
+    InMemoryHistoryProvider,
     MCPStreamableHTTPTool,
 )
-from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework.openai import OpenAIChatClient
 from azure.identity.aio import DefaultAzureCredential
 
 logger = logging.getLogger("uvicorn.error")
@@ -58,7 +58,7 @@ You have access to tools provided by the Azure Operations MCP server. Use them t
 4. The user's Azure token is automatically injected via HTTP headers — you do not need to supply a token parameter to tools
 5. **CRITICAL: When report tools (generate_resource_report, generate_cost_report, generate_dashboard_report) return a report_id, include it in your response exactly like this: [report_id=XXXXX]. Do NOT output any HTML. Just describe the findings in text and include the report_id marker so the UI can render the visual report.**
 6. For VM operations (start/stop), confirm with the user before executing
-7. Use find_orphaned_resources and check_idle_resources for cost optimization analysis
+7. For unused/idle resource analysis, prefer scan_unused_resources which performs a comprehensive multi-signal scan (Resource Graph + Azure Monitor metrics + Cost Management + Activity Log) across VMs, Storage, SQL, Cosmos DB, Event Hub, Service Bus, AI Search, Cognitive Services, ACR, Key Vault, Container Apps, APIM, App Service, Redis, and ML Workspaces. Use find_orphaned_resources only for quick structural checks. Use check_idle_resources only for targeted metric checks on specific known resources.
 8. **ALWAYS automatically generate a visual report when you retrieve data that can be visualized.** After calling tools like find_orphaned_resources, check_idle_resources, list_resources, cost queries, or any tool that returns a list of resources or data points, IMMEDIATELY call the appropriate report tool (generate_resource_report, generate_cost_report, or generate_dashboard_report) with the results. Do NOT ask the user if they want a report — just generate it along with the text summary. The user should always see both a text summary and a visual report in a single response.
 9. NEVER include raw HTML, iframe tags, or srcdoc attributes in your response text. Reports are rendered separately by the UI.
 10. When the user asks to send, email, or notify someone about resources (e.g. "send email about unused resources"), first gather the resource data using the appropriate tools (find_orphaned_resources, check_idle_resources, list_resources, etc.), then call send_resource_email with a JSON-serialized summary as the resource_details parameter. If the user provides a specific recipient, use send_custom_email instead.
@@ -89,7 +89,7 @@ class ResponseMessage:
 
 
 def create_message_store():
-    return ChatMessageStore()
+    return InMemoryHistoryProvider()
 
 
 class AzureOpsAgent:
@@ -100,7 +100,7 @@ class AzureOpsAgent:
 
     def __init__(self):
         self._access_token = None
-        self._agent: Optional[ChatAgent] = None
+        self._agent: Optional[Agent] = None
 
     async def _get_fresh_token(self):
         if _aoai_api_key:
@@ -116,31 +116,36 @@ class AzureOpsAgent:
 
         # Pass the user's Azure Management token as an Authorization header
         # so the MCP server middleware can extract it for Azure API calls.
-        mcp_headers = {}
+        mcp_http_client = None
         if azure_token:
-            mcp_headers["Authorization"] = f"Bearer {azure_token}"
+            from httpx import AsyncClient, Timeout
+            mcp_http_client = AsyncClient(
+                headers={"Authorization": f"Bearer {azure_token}"},
+                follow_redirects=True,
+                timeout=Timeout(60, read=300),
+            )
 
         azure_ops_mcp = MCPStreamableHTTPTool(
             name="azure_ops_mcp_server",
             url=MCP_SERVER_URL,
-            headers=mcp_headers,
+            http_client=mcp_http_client,
         )
 
         chat_client = (
-            AzureOpenAIChatClient(api_key=_aoai_api_key)
+            OpenAIChatClient(api_key=_aoai_api_key)
             if _aoai_api_key
-            else AzureOpenAIChatClient(ad_token=token.token)
+            else OpenAIChatClient(credential=credential)
         )
 
-        self._agent = ChatAgent(
+        self._agent = Agent(
+            chat_client,
+            AZURE_OPS_INSTRUCTIONS,
             name="azure_ops_agent",
             description="Azure Operations Agent that monitors, manages, queries, and analyzes Azure resources.",
-            instructions=AZURE_OPS_INSTRUCTIONS,
-            chat_client=chat_client,
             tools=azure_ops_mcp,
         )
 
-    async def run_workflow(self, chat_history: List[ChatMessage], azure_token: str = ""):
+    async def run_workflow(self, chat_history: List[Message], azure_token: str = ""):
         """
         Stream agent responses as NDJSON. The azure_token is injected into
         tool calls so the MCP server can authenticate with Azure APIs.
@@ -151,7 +156,8 @@ class AzureOpsAgent:
         output = ""
 
         try:
-            async for response in self._agent.run_stream(chat_history):
+            stream = self._agent.run(chat_history, stream=True)
+            async for response in stream:
                 if hasattr(response, "text") and response.text:
                     output += response.text
                     yield _ndjson({
@@ -163,13 +169,13 @@ class AzureOpsAgent:
 
             # Extract report_id from the agent's text output (pattern: [report_id=XXXXX])
             report_id = None
-            report_match = re.search(r'\[report_id=([a-f0-9]+)\]', output)
+            report_match = re.search(r'\[report_id=([a-f0-9-]+)\]', output)
             if report_match:
                 report_id = report_match.group(1)
                 # Remove the report_id marker from the text shown to the user
                 output = output.replace(report_match.group(0), "").strip()
 
-            chat_history.append(ChatMessage(role="assistant", text=output))
+            chat_history.append(Message("assistant", [output]))
 
             done_msg = ResponseMessage(type="done", result=output)
             if report_id:

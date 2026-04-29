@@ -377,6 +377,24 @@ function Invoke-ContainerAppsDeploy {
     $paramsJson.parameters.deployFastApiContainerApp.value = $true
     $paramsJson.parameters.deployWebappContainerApp.value = $true
 
+    # Resolve ${VAR_NAME} azd-interpolation tokens from azd env values
+    foreach ($paramName in @($paramsJson.parameters.PSObject.Properties.Name)) {
+        $val = $paramsJson.parameters.$paramName.value
+        if ($val -is [string] -and $val -match '^\$\{(\w+)(=.*)?\}$') {
+            $envVarName = $Matches[1]
+            $resolved = Get-AzdEnvValue $envVarName
+            if (-not [string]::IsNullOrEmpty($resolved)) {
+                $paramsJson.parameters.$paramName.value = $resolved
+                Write-Host "  Resolved parameter '$paramName' from azd env '$envVarName'"
+            } else {
+                # Use default after '=' if present, otherwise empty string
+                $default = if ($Matches[2]) { $Matches[2].TrimStart('=') } else { '' }
+                $paramsJson.parameters.$paramName.value = $default
+                Write-Host "  Parameter '$paramName': using default '$default' (azd env '$envVarName' not set)"
+            }
+        }
+    }
+
     $resolvedParamsFile = Join-Path $env:TEMP "azd-deploy-params-resolved.json"
     $paramsJson | ConvertTo-Json -Depth 10 | Set-Content -Path $resolvedParamsFile -Encoding UTF8
     Write-Host "  Resolved parameters written to: $resolvedParamsFile"

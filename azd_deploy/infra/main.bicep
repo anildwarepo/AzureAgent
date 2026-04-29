@@ -140,6 +140,16 @@ param azureOpenAiApiVersion string = '2025-02-01-preview'
 @description('Azure OpenAI Chat deployment name')
 param azureOpenAiChatDeploymentName string = ''
 
+@description('Entra ID App Registration client ID for OBO flow (overrides managed identity AZURE_CLIENT_ID)')
+param entraAppClientId string = ''
+
+@description('Entra ID App Registration client secret for OBO flow')
+@secure()
+param entraAppClientSecret string = ''
+
+@description('Azure OpenAI model name (e.g. gpt-4.1)')
+param azureOpenAiModel string = 'gpt-4.1'
+
 
 
 // FastAPI Container App Parameters
@@ -280,7 +290,7 @@ module fastApiContainerApp 'modules/container-app.bicep' = if ((deployFastApiCon
     memory: fastApiMemory
     minReplicas: 1
     maxReplicas: 3
-    environmentVariables: [
+    environmentVariables: concat([
       // Azure OpenAI configuration
       {
         name: 'AZURE_OPENAI_ENDPOINT'
@@ -312,8 +322,36 @@ module fastApiContainerApp 'modules/container-app.bicep' = if ((deployFastApiCon
         name: 'AZURE_TENANT_ID'
         value: tenant().tenantId
       }
-    ]
-    secrets: []
+      // Azure OpenAI model name
+      {
+        name: 'AZURE_OPENAI_CHAT_MODEL'
+        value: azureOpenAiModel
+      }
+      {
+        name: 'AZURE_OPENAI_MODEL'
+        value: azureOpenAiModel
+      }
+    ],
+    // When app registration is provided, override AZURE_CLIENT_ID and add AZURE_CLIENT_SECRET
+    // The AZURE_CLIENT_ID override takes precedence over the managed identity one from container-app.bicep
+    !empty(entraAppClientId) ? [
+      {
+        name: 'AZURE_CLIENT_ID'
+        value: entraAppClientId
+      }
+    ] : [],
+    !empty(entraAppClientSecret) ? [
+      {
+        name: 'AZURE_CLIENT_SECRET'
+        secretRef: 'entra-client-secret'
+      }
+    ] : [])
+    secrets: !empty(entraAppClientSecret) ? [
+      {
+        name: 'entra-client-secret'
+        value: entraAppClientSecret
+      }
+    ] : []
     tags: tags
   }
 }
@@ -362,6 +400,10 @@ module webappContainerApp 'modules/container-app.bicep' = if ((deployWebappConta
     minReplicas: 1
     maxReplicas: 3
     environmentVariables: [
+      {
+        name: 'AZURE_CLIENT_ID'
+        value: !empty(entraAppClientId) ? entraAppClientId : 'not-configured'
+      }
       {
         name: 'FASTAPI_BACKEND_URL'
         value: 'https://${fastApiContainerAppName}.${containerAppsEnv!.outputs.defaultDomain}'

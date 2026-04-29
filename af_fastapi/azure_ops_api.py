@@ -36,7 +36,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
-from agent_framework import ChatMessage
+from agent_framework import Message, Content
 from azure_ops_orchestrator import AzureOpsOrchestrator, ResponseMessage, _ndjson
 from azure_ops_auth import decode_and_validate_bearer
 from azure_ops_sse_bus import SESSIONS, associate_user_session
@@ -78,18 +78,17 @@ class ChatSessionManager:
     """Keeps per-user chat history in memory."""
 
     def __init__(self) -> None:
-        self._sessions: Dict[str, List[ChatMessage]] = {}
+        self._sessions: Dict[str, List[Message]] = {}
 
-    def get_history(self, user_id: str) -> List[ChatMessage]:
+    def get_history(self, user_id: str) -> List[Message]:
         return self._sessions.setdefault(user_id, [])
 
     def append(self, user_id: str, role: str, content: str, image_uri: str | None = None) -> None:
         if image_uri:
-            from agent_framework import TextContent, DataContent
-            contents = [TextContent(text=content), DataContent(uri=image_uri)]
-            self.get_history(user_id).append(ChatMessage(role=role, contents=contents))
+            contents = [Content.from_text(content), Content.from_uri(image_uri)]
+            self.get_history(user_id).append(Message(role, contents))
         else:
-            self.get_history(user_id).append(ChatMessage(role=role, text=content))
+            self.get_history(user_id).append(Message(role, [content]))
 
     def clear(self, user_id: str) -> None:
         self._sessions.pop(user_id, None)

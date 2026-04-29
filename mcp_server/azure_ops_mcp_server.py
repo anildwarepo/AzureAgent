@@ -99,6 +99,7 @@ from support_tools import (
     add_ticket_communication,
 )
 from report_store import get_report
+from unused_scan_tools import scan_unused_resources
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -138,6 +139,11 @@ mcp.tool(check_resource_health)
 mcp.tool(get_activity_log)
 mcp.tool(list_metric_alerts)
 mcp.tool(check_idle_resources)
+
+# ---------------------------------------------------------------------------
+# Deep Unused Resource Scanner
+# ---------------------------------------------------------------------------
+mcp.tool(scan_unused_resources)
 
 # ---------------------------------------------------------------------------
 # Resource Management tools

@@ -11,8 +11,11 @@ a 'token' parameter — they call get_current_token() instead.
 """
 
 import contextvars
+import logging
 
 from azure.core.credentials import AccessToken, TokenCredential
+
+logger = logging.getLogger(__name__)
 
 # ── Context var: holds the Azure bearer token for the current request ─────
 _current_azure_token: contextvars.ContextVar[str] = contextvars.ContextVar(
@@ -26,8 +29,11 @@ def get_current_token() -> str:
 
 
 def get_current_credential() -> "BearerTokenCredential":
-    """Convenience: return a BearerTokenCredential from the current token."""
-    return BearerTokenCredential(get_current_token())
+    """Return a BearerTokenCredential from the current OBO-exchanged token."""
+    token = get_current_token()
+    if not token:
+        logger.warning("No bearer token found in request context — Azure API calls will fail")
+    return BearerTokenCredential(token)
 
 
 class BearerTokenCredential(TokenCredential):

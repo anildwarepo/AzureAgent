@@ -14,6 +14,11 @@ env/
 dist/
 build/
 
+# Environment files (contain secrets)
+.env
+.env.*
+!.env.sample
+
 # IDE
 .vscode/
 .idea/

@@ -20,21 +20,13 @@ from enum import Enum
 from typing import List, Optional
 
 from agent_framework import (
-    AgentRunUpdateEvent,
-    ChatAgent,
-    ChatMessage,
-    ChatMessageStore,
-    ExecutorCompletedEvent,
-    ExecutorInvokedEvent,
-    HandoffBuilder,
+    Agent,
+    Message,
+    InMemoryHistoryProvider,
     MCPStreamableHTTPTool,
-    RequestInfoEvent,
-    WorkflowOutputEvent,
     WorkflowRunState,
-    WorkflowStartedEvent,
-    WorkflowStatusEvent,
 )
-from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework.openai import OpenAIChatClient
 from azure.identity.aio import DefaultAzureCredential
 
 logger = logging.getLogger("uvicorn.error")
@@ -76,6 +68,8 @@ TRIAGE_INSTRUCTIONS = """You are an Azure Operations Triage Agent. Your role is 
 3. Do NOT answer the question yourself — always hand off to a specialist.
 4. Handle only one handoff per user question.
 5. ALL of these are valid Azure Operations topics: resources, costs, monitoring, quotas, support tickets, support cases, and policy. Always route them — never refuse.
+6. **CRITICAL: After the specialist agent returns its response, you MUST relay the specialist's FULL response text directly to the user. Do NOT summarize or paraphrase it. Do NOT add your own preamble like "Your request has been routed..." — just output the specialist's response verbatim.**
+7. **CRITICAL: When calling a handoff tool, ALWAYS include the subscription ID in the task string.** Extract it from the conversation context (e.g. "[Subscription ID: xxx]") and prepend it to the user's question. Example task: "Subscription ID: e4718866-... \n\nShow communications on my latest support ticket". The specialist agents do NOT have access to the chat history — the task string is their ONLY input.
 """
 
 AZURE_OPS_INSTRUCTIONS = """You are an Azure Operations Agent that helps users monitor, manage, query, and analyze their Azure resources.
@@ -97,7 +91,7 @@ You have access to tools provided by the Azure Operations MCP server. Use them t
 4. The user's Azure token is automatically injected via HTTP headers — you do not need to supply a token parameter to tools
 5. **CRITICAL: When report tools return a report_id, include it in your response exactly like this: [report_id=XXXXX]. Do NOT output any HTML.**
 6. For VM operations (start/stop), confirm with the user before executing
-7. Use find_orphaned_resources and check_idle_resources for cost optimization analysis
+7. For unused/idle resource analysis, prefer scan_unused_resources which performs a comprehensive multi-signal scan (Resource Graph + Azure Monitor metrics + Cost Management + Activity Log). Use find_orphaned_resources only for quick structural checks. Use check_idle_resources only for targeted metric checks on specific known resources.
 8. When presenting data, offer to generate a visual report
 9. NEVER include raw HTML, iframe tags, or srcdoc attributes in your response text.
 10. When the user asks to send, email, or notify someone about resources, first gather the resource data, then call send_resource_email or send_custom_email.
@@ -206,7 +200,7 @@ You have access to support tools provided by the Azure Operations MCP server.
    - Severity level (minimal, moderate, critical)
    - For technical issues: the affected Azure resource ID
 3. After creating a ticket, report the ticket name and ID for tracking.
-4. When listing tickets, offer to filter by status (Open, Closed, Updating).
+4. When listing tickets or asked about "latest" or "recent" tickets, **search ALL statuses** (do NOT filter by Open only). Only filter by a specific status if the user explicitly asks for it (e.g. "show my open tickets").
 5. The user's Azure token is automatically injected — you do not need to supply a token parameter.
 6. **CRITICAL: When report tools return a report_id, include it like this: [report_id=XXXXX].**
 7. If the question is not about support tickets, hand off to the appropriate agent.
@@ -240,7 +234,7 @@ class ResponseMessage:
 
 
 def create_message_store():
-    return ChatMessageStore()
+    return InMemoryHistoryProvider()
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +249,7 @@ class AzureOpsOrchestrator:
 
     def __init__(self):
         self._access_token = None
-        self._workflow = None
+        self._triage_agent = None
 
     async def _get_fresh_token(self):
         if _aoai_api_key:
@@ -266,137 +260,120 @@ class AzureOpsOrchestrator:
         return self._access_token
 
     async def _build_workflow(self, azure_token: str = ""):
-        """Build the handoff workflow with all specialist agents."""
+        """Build the triage agent with specialist agents as tools."""
         token = await self._get_fresh_token()
 
         # MCP tool configuration — pass user's Azure token to the MCP server
-        mcp_headers = {}
+        mcp_http_client = None
         if azure_token:
-            mcp_headers["Authorization"] = f"Bearer {azure_token}"
+            from httpx import AsyncClient, Timeout
+            mcp_http_client = AsyncClient(
+                headers={"Authorization": f"Bearer {azure_token}"},
+                follow_redirects=True,
+                timeout=Timeout(60, read=300),
+            )
 
         azure_ops_mcp = MCPStreamableHTTPTool(
             name="azure_ops_mcp_server",
             url=MCP_SERVER_URL,
-            headers=mcp_headers,
+            http_client=mcp_http_client,
         )
 
         chat_client_factory = lambda: (
-            AzureOpenAIChatClient(api_key=_aoai_api_key)
+            OpenAIChatClient(api_key=_aoai_api_key)
             if _aoai_api_key
-            else AzureOpenAIChatClient(ad_token=token.token)
-        )
-
-        # Triage agent — routes to specialists
-        triage_agent = ChatAgent(
-            name="triage_agent",
-            description="Triage agent that routes Azure questions to the appropriate specialist.",
-            instructions=TRIAGE_INSTRUCTIONS,
-            chat_client=chat_client_factory(),
-            tools=azure_ops_mcp,
+            else OpenAIChatClient(credential=credential)
         )
 
         # Azure Ops agent — monitoring, resources, cost, reports, email
-        azure_ops_agent = ChatAgent(
+        azure_ops_agent = Agent(
+            chat_client_factory(),
+            AZURE_OPS_INSTRUCTIONS,
             name="azure_ops_agent",
             description="Azure Operations Agent for monitoring, managing, querying, and analyzing Azure resources.",
-            instructions=AZURE_OPS_INSTRUCTIONS,
-            chat_client=chat_client_factory(),
             tools=azure_ops_mcp,
         )
 
         # Policy agent — policy queries, compliance, authoring
-        policy_agent = ChatAgent(
+        policy_agent = Agent(
+            chat_client_factory(),
+            POLICY_AGENT_INSTRUCTIONS,
             name="policy_agent",
             description="Azure Policy Agent for querying policy assignments, compliance, and authoring policy definitions.",
-            instructions=POLICY_AGENT_INSTRUCTIONS,
-            chat_client=chat_client_factory(),
             tools=azure_ops_mcp,
         )
 
         # Quota list agent — discover current quota limits
-        quota_list_agent = ChatAgent(
+        quota_list_agent = Agent(
+            chat_client_factory(),
+            QUOTA_LIST_AGENT_INSTRUCTIONS,
             name="quota_list_agent",
             description="Azure Quota Listing Agent for discovering current quota limits by provider and region.",
-            instructions=QUOTA_LIST_AGENT_INSTRUCTIONS,
-            chat_client=chat_client_factory(),
             tools=azure_ops_mcp,
         )
 
         # Quota request agent — submit quota increase requests
-        quota_request_agent = ChatAgent(
+        quota_request_agent = Agent(
+            chat_client_factory(),
+            QUOTA_REQUEST_AGENT_INSTRUCTIONS,
             name="quota_request_agent",
             description="Azure Quota Request Agent for submitting quota increase requests.",
-            instructions=QUOTA_REQUEST_AGENT_INSTRUCTIONS,
-            chat_client=chat_client_factory(),
             tools=azure_ops_mcp,
         )
 
         # Support agent — create, list, update support tickets and communications
-        support_agent = ChatAgent(
+        support_agent = Agent(
+            chat_client_factory(),
+            SUPPORT_AGENT_INSTRUCTIONS,
             name="support_agent",
             description="Azure Support Request Agent for creating, viewing, updating support tickets and managing communications.",
-            instructions=SUPPORT_AGENT_INSTRUCTIONS,
-            chat_client=chat_client_factory(),
             tools=azure_ops_mcp,
         )
 
-        # Build workflow with handoff pattern
-        self._workflow = (
-            HandoffBuilder(
-                participants=[triage_agent, azure_ops_agent, policy_agent, quota_list_agent, quota_request_agent, support_agent]
-            )
-            .set_coordinator(triage_agent)
-            .add_handoff(triage_agent, [azure_ops_agent, policy_agent, quota_list_agent, quota_request_agent, support_agent])
-            .add_handoff(azure_ops_agent, [policy_agent, quota_list_agent, quota_request_agent, support_agent])
-            .add_handoff(policy_agent, [azure_ops_agent])
-            .add_handoff(quota_list_agent, [quota_request_agent, azure_ops_agent, support_agent])
-            .add_handoff(quota_request_agent, [quota_list_agent, azure_ops_agent, support_agent])
-            .add_handoff(support_agent, [azure_ops_agent])
-            .with_termination_condition(
-                lambda conv: sum(1 for msg in conv if msg.role.value == "user") > 6
-            )
-            .build()
+        # Triage agent — routes to specialists via agent-as-tool pattern
+        # propagate_session=True shares the full chat history with specialist agents
+        # so they have access to subscription context and prior conversation
+        specialist_tools = [
+            azure_ops_agent.as_tool(name="handoff_to_azure_ops_agent", description="Hand off to the Azure Operations Agent for monitoring, resources, cost, reports, email.", propagate_session=True),
+            policy_agent.as_tool(name="handoff_to_policy_agent", description="Hand off to the Azure Policy Agent for policy queries, compliance, and authoring.", propagate_session=True),
+            quota_list_agent.as_tool(name="handoff_to_quota_list_agent", description="Hand off to the Quota Listing Agent for discovering current quota limits.", propagate_session=True),
+            quota_request_agent.as_tool(name="handoff_to_quota_request_agent", description="Hand off to the Quota Request Agent for submitting quota increase requests.", propagate_session=True),
+            support_agent.as_tool(name="handoff_to_support_agent", description="Hand off to the Support Agent for creating and managing support tickets.", propagate_session=True),
+        ]
+
+        self._triage_agent = Agent(
+            chat_client_factory(),
+            TRIAGE_INSTRUCTIONS,
+            name="triage_agent",
+            description="Triage agent that routes Azure questions to the appropriate specialist.",
+            tools=[azure_ops_mcp, *specialist_tools],
         )
 
-    async def run_workflow(self, chat_history: List[ChatMessage], azure_token: str = ""):
+    async def run_workflow(self, chat_history: List[Message], azure_token: str = ""):
         """
         Stream orchestrated agent responses as NDJSON.
+        Uses triage agent with specialist agents as tools.
         """
+        output = ""
         await self._build_workflow(azure_token=azure_token)
         logger.info(f"Running orchestrated workflow: {chat_history[-1].text[:100]}")
 
-        output = ""
-
         try:
-            async for event in self._workflow.run_stream(chat_history):
-                if isinstance(event, WorkflowStartedEvent):
-                    pass  # Suppress workflow metadata from chat
-                elif isinstance(event, WorkflowStatusEvent):
-                    pass  # Suppress status updates from chat
-                elif isinstance(event, ExecutorInvokedEvent):
-                    agent_name = event.executor_id or "agent"
-                    # Emit a subtle indicator of which agent is working
-                    resp = ResponseMessage(
-                        type="ExecutorInvokedEvent",
-                        delta=f"\n**[{agent_name}]** ",
-                    )
+            stream = self._triage_agent.run(chat_history, stream=True)
+            async for response in stream:
+                if hasattr(response, "text") and response.text:
+                    output += response.text
+                    resp = ResponseMessage(type="AgentRunUpdateEvent", delta=response.text)
                     yield _ndjson({"response_message": asdict(resp)})
-                elif isinstance(event, AgentRunUpdateEvent) and event.data.text is not None:
-                    output += event.data.text
-                    resp = ResponseMessage(type="AgentRunUpdateEvent", delta=event.data.text)
-                    yield _ndjson({"response_message": asdict(resp)})
-                elif isinstance(event, RequestInfoEvent):
-                    # Workflow complete
-                    pass
 
             # Extract report_id from the agent's text output.
             # Matches: [report_id=XXXXX], report_id: XXXXX, report ID: XXXXX, report ID XXXXX
             report_id = None
             report_patterns = [
-                r'\[report_id=([a-f0-9]+)\]',
-                r'report[_ ]id[:\s]+([a-f0-9]{8,})',
-                r'report ID[:\s]+([a-f0-9]{8,})',
-                r'referencing report ID[:\s]+([a-f0-9]{8,})',
+                r'\[report_id=([a-f0-9-]+)\]',
+                r'report[_ ]id[=:\s]+([a-f0-9-]{8,})',
+                r'report ID[=:\s]+([a-f0-9-]{8,})',
+                r'referencing report ID[=:\s]+([a-f0-9-]{8,})',
             ]
             for pattern in report_patterns:
                 report_match = re.search(pattern, output, re.IGNORECASE)
@@ -406,9 +383,10 @@ class AzureOpsOrchestrator:
 
             # Clean all report_id markers/mentions from visible text
             if report_id:
-                output = re.sub(r'\[report_id=[a-f0-9]+\]', '', output).strip()
+                # Remove [report_id=XXX], report_id=XXX, report_id: XXX, report ID: XXX
+                output = re.sub(r'\[?report[_ ]?id[=:\s]+[a-f0-9-]+\]?', '', output, flags=re.IGNORECASE).strip()
 
-            chat_history.append(ChatMessage(role="assistant", text=output))
+            chat_history.append(Message("assistant", [output]))
 
             done_msg = ResponseMessage(type="done", result=output)
             if report_id:

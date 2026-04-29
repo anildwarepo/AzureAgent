@@ -107,13 +107,8 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json(cpu)
             memory: memory
           }
-          // Add AZURE_CLIENT_ID for managed identity, then append user-provided env vars
-          env: concat([
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: acrPullIdentity.properties.clientId
-            }
-          ], environmentVariables)
+          // Caller provides all env vars including AZURE_CLIENT_ID when needed
+          env: environmentVariables
         }
       ]
       scale: {

@@ -109,7 +109,7 @@ async def get_resource_metrics(
 
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=min(timespan_days, 30))
-    timespan = f"{start_time.isoformat()}/{end_time.isoformat()}"
+    timespan = f"{start_time.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
 
     response = client.metrics.list(
         resource_uri=resource_id,
@@ -211,7 +211,7 @@ async def get_activity_log(
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=min(days, 89))
 
-    filter_parts = [f"eventTimestamp ge '{start_time.isoformat()}'"]
+    filter_parts = [f"eventTimestamp ge '{start_time.strftime('%Y-%m-%dT%H:%M:%SZ')}'"]
     if resource_id:
         filter_parts.append(f"resourceUri eq '{resource_id}'")
     filter_str = " and ".join(filter_parts)
@@ -303,7 +303,7 @@ async def check_idle_resources(
 
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=min(days, 30))
-    timespan = f"{start_time.isoformat()}/{end_time.isoformat()}"
+    timespan = f"{start_time.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
 
     ids = [rid.strip() for rid in resource_ids.split(",") if rid.strip()]
     results = []
