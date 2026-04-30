@@ -95,7 +95,7 @@ The agent uses a **handoff orchestration** pattern with 6 specialist agents, eac
   <img src="docs/agent_architecture.svg" alt="Architecture Diagram" width="960"/>
 </p>
 
-**Token flow:** User signs in via Entra ID in the SPA → SPA acquires a token scoped to the backend API (`api://{clientId}/access_as_user`) → backend validates the JWT and exchanges it via the **On-Behalf-Of (OBO)** flow for an Azure Management token → management token is forwarded to the MCP server → each MCP tool uses the token to call Azure APIs on behalf of the user. Azure OpenAI is accessed separately using the **backend service principal's own identity** — never with the user's delegated token.
+**Token flow:** User signs in via Entra ID in the SPA → SPA acquires **Token 1** scoped to the backend API (`api://{clientId}/access_as_user`) and silently tries **Token 2** for Azure Management (`management.azure.com/user_impersonation`) via incremental consent → backend validates Token 1 (JWT) and resolves the management token (uses Token 2 directly if provided, otherwise exchanges Token 1 via the **On-Behalf-Of (OBO)** flow) → management token is forwarded to the MCP server → each MCP tool uses the token to call Azure APIs on behalf of the user. Azure OpenAI / Foundry is accessed separately using the **backend service principal's own identity** (`DefaultAzureCredential`) — never with the user's delegated token. This separation means users don't need Cognitive Services RBAC roles and LLM costs stay centralized.
 
 ---
 
@@ -240,14 +240,31 @@ At minimum, **Reader** is required to use most features.
 
 ### 4. Multi-Tenant Configuration
 
-The app is configured for multi-tenant access. Users from **any** Azure AD organization can sign in.
+The app is configured for multi-tenant access. Users from **any** Azure AD organization can sign in — **without requiring admin consent** at login.
+
+**How consent works:**
+
+| Moment | Scope | Who can consent | What happens |
+|---|---|---|---|
+| **Login** | `access_as_user` | Any user | Pre-authorized client — no consent prompt shown |
+| **After login** | `management.azure.com` | Any user (or admin) | SPA silently tries `acquireTokenSilent`. If it succeeds, the direct management token is sent to the backend via `X-Azure-Management-Token` header |
+| **Fallback** | `.default` (OBO) | Admin (pre-granted) | If the direct management token fails, the backend exchanges the API token for a management token via the OBO flow |
 
 **How it works across tenants:**
 
 1. **SPA** uses `authority: "https://login.microsoftonline.com/common"` — users from any org can sign in
-2. **Backend** extracts the `tid` (tenant ID) claim from the incoming token and creates a tenant-specific MSAL confidential client for OBO
-3. **OBO exchange** targets `https://login.microsoftonline.com/{user's tenant}` to get a management token scoped to that user's tenant
-4. **Azure OpenAI** is always accessed with the backend SP identity (your resource, your cost) — independent of which tenant the user comes from
+2. **Login** only requests `access_as_user` (user-consentable, pre-authorized) — **no admin consent prompt**
+3. **After login**, the SPA silently tries to acquire a direct Azure Management token via incremental consent
+4. **Backend** validates the API token, then resolves the management token:
+   - If `X-Azure-Management-Token` header is present → use it directly (no OBO needed)
+   - Otherwise → OBO exchange using a tenant-specific MSAL confidential client
+5. **Azure OpenAI / Foundry** is always accessed with the backend SP identity (your resource, your cost) — independent of which tenant the user comes from
+
+**For external tenant admins** who want to pre-approve the app for all their users (optional):
+
+```
+https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={your-client-id}
+```
 
 **For external tenants:** Each tenant's admin must grant consent once via:
 

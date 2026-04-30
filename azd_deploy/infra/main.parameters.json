@@ -128,6 +128,9 @@
     "entraAppClientSecret": {
       "value": "${ENTRA_APP_CLIENT_SECRET}"
     },
+    "entraAppSpObjectId": {
+      "value": "${ENTRA_APP_SP_OBJECT_ID}"
+    },
     "azureOpenAiModel": {
       "value": "gpt-4.1"
     }

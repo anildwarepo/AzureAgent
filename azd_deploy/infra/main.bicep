@@ -147,6 +147,9 @@ param entraAppClientId string = ''
 @secure()
 param entraAppClientSecret string = ''
 
+@description('Entra ID App Registration service principal object ID (for RBAC on provisioned resources)')
+param entraAppSpObjectId string = ''
+
 @description('Azure OpenAI model name (e.g. gpt-4.1)')
 param azureOpenAiModel string = 'gpt-4.1'
 
@@ -368,6 +371,19 @@ resource fastApiOpenAiUserRole 'Microsoft.Authorization/roleAssignments@2022-04-
   scope: aiServicesAccount
   properties: {
     principalId: fastApiContainerApp!.outputs.identityPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd') // Cognitive Services OpenAI User
+  }
+}
+
+// When an Entra ID app registration is used (OBO flow), the container app
+// authenticates as the app registration SP via AZURE_CLIENT_ID + AZURE_CLIENT_SECRET
+// (DefaultAzureCredential), NOT the managed identity.  Grant the SP access too.
+resource appRegistrationOpenAiUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(entraAppClientId)) {
+  name: guid(accountName, entraAppClientId, 'cognitive-services-openai-user')
+  scope: aiServicesAccount
+  properties: {
+    principalId: entraAppSpObjectId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd') // Cognitive Services OpenAI User
   }
