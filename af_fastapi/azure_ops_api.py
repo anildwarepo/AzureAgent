@@ -146,15 +146,17 @@ async def chat(
     req: ChatRequest,
     request: Request,
     authorization: Optional[str] = Header(default=None),
+    x_azure_management_token: Optional[str] = Header(default=None),
 ):
     """
     Main chat endpoint. Accepts a user message and streams back NDJSON
     responses from the Azure Operations Agent.
 
-    The Authorization header must contain a valid Entra ID bearer token
-    with Azure management scope.
+    The Authorization header must contain a valid Entra ID bearer token.
+    Optionally, X-Azure-Management-Token provides a direct management token
+    (avoids OBO / admin consent in external tenants).
     """
-    ctx = decode_and_validate_bearer(authorization)
+    ctx = decode_and_validate_bearer(authorization, x_azure_management_token)
     user_id = ctx["user_oid"]
     azure_token = ctx["azure_token"]
 
@@ -196,9 +198,10 @@ async def chat(
 @app.post("/chat/clear")
 async def clear_chat(
     authorization: Optional[str] = Header(default=None),
+    x_azure_management_token: Optional[str] = Header(default=None),
 ):
     """Clear chat history for the current user."""
-    ctx = decode_and_validate_bearer(authorization)
+    ctx = decode_and_validate_bearer(authorization, x_azure_management_token)
     user_id = ctx["user_oid"]
     session_manager.clear(user_id)
     return {"ok": True, "message": "Chat history cleared"}
@@ -207,6 +210,7 @@ async def clear_chat(
 @app.get("/subscriptions")
 async def list_subscriptions(
     authorization: Optional[str] = Header(default=None),
+    x_azure_management_token: Optional[str] = Header(default=None),
 ):
     """
     List Azure subscriptions accessible to the authenticated user.
@@ -214,7 +218,7 @@ async def list_subscriptions(
     """
     import httpx
 
-    ctx = decode_and_validate_bearer(authorization)
+    ctx = decode_and_validate_bearer(authorization, x_azure_management_token)
     azure_token = ctx["azure_token"]
 
     headers = {

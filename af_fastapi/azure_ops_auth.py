@@ -72,13 +72,18 @@ def _exchange_obo_token(user_assertion: str, tenant_id: str) -> str:
     raise HTTPException(status_code=401, detail=f"OBO token exchange failed: {error}")
 
 
-def decode_and_validate_bearer(auth_header: Optional[str]) -> Dict[str, Any]:
+def decode_and_validate_bearer(auth_header: Optional[str], mgmt_token_header: Optional[str] = None) -> Dict[str, Any]:
     """
     Validate a Bearer token from the Authorization header.
 
     Returns:
         Dict with 'token' (raw JWT), 'claims' (decoded payload), and
         'azure_token' (the token to pass to Azure management APIs).
+
+    If the request includes an ``X-Azure-Management-Token`` header the
+    backend trusts it as a direct management token (acquired via incremental
+    consent on the SPA).  Otherwise it falls back to the OBO exchange.
+    This avoids requiring admin consent in external Entra tenants.
     """
     if not auth_header or not auth_header.lower().startswith("bearer "):
         logger.warning("Auth: No bearer token in Authorization header")
@@ -129,8 +134,13 @@ def decode_and_validate_bearer(auth_header: Optional[str]) -> Dict[str, Any]:
                 },
             )
 
-            # Exchange the SPA token for a management-scoped token via OBO
-            azure_token = _exchange_obo_token(token, token_tid)
+            # Use the direct management token from the SPA if provided,
+            # otherwise exchange the SPA token via OBO.
+            if mgmt_token_header:
+                azure_token = mgmt_token_header
+                logger.info("Auth: Using direct management token from SPA (no OBO needed)")
+            else:
+                azure_token = _exchange_obo_token(token, token_tid)
 
             return {
                 "token": token,

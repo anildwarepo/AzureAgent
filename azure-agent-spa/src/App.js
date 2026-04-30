@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useIsAuthenticated, useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError, InteractionStatus } from "@azure/msal-browser";
-import { azureManagementLoginRequest } from "./authConfig";
+import { azureManagementLoginRequest, backendApiLoginRequest, buildAdminConsentUrl } from "./authConfig";
 import "./App.css";
 
 const API_BASE = process.env.REACT_APP_API_BASE ?? "";
@@ -143,7 +143,8 @@ export default function App() {
 
   const [error, setError] = useState(null);
   const [needsConsent, setNeedsConsent] = useState(false);
-  const [accessToken, setAccessToken] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);       // backend API token
+  const [mgmtToken, setMgmtToken] = useState(null);           // Azure Management token (direct)
 
   // View state: "chat" or "dashboard"
   const [view, setView] = useState("chat");
@@ -151,6 +152,7 @@ export default function App() {
   // Subscription picker
   const [subscriptions, setSubscriptions] = useState([]);
   const [selectedSub, setSelectedSub] = useState("");
+  const [subsLoaded, setSubsLoaded] = useState(false);
 
   // Chat state
   const [chatInput, setChatInput] = useState("");
@@ -173,11 +175,13 @@ export default function App() {
 
   const login = () => {
     setError(null);
-    instance.loginRedirect(azureManagementLoginRequest);
+    // Only request the backend API scope — user-consentable, no admin consent
+    instance.loginRedirect(backendApiLoginRequest);
   };
 
   const logout = () => {
     setAccessToken(null);
+    setMgmtToken(null);
     setMessages([]);
     setSubscriptions([]);
     setSelectedSub("");
@@ -185,10 +189,11 @@ export default function App() {
     instance.logoutRedirect({ account });
   };
 
+  // Acquire the backend API token (access_as_user scope)
   const getToken = useCallback(async () => {
     if (!account) return null;
     try {
-      const res = await instance.acquireTokenSilent({ ...azureManagementLoginRequest, account });
+      const res = await instance.acquireTokenSilent({ ...backendApiLoginRequest, account });
       setAccessToken(res.accessToken);
       setNeedsConsent(false);
       return res.accessToken;
@@ -202,16 +207,32 @@ export default function App() {
     }
   }, [account, instance]);
 
+  // Try to silently acquire a direct Azure Management token.
+  // If the user's tenant hasn't consented, this fails silently —
+  // the backend will fall back to OBO with the API token.
+  const tryAcquireMgmtToken = useCallback(async () => {
+    if (!account) return null;
+    try {
+      const res = await instance.acquireTokenSilent({ ...azureManagementLoginRequest, account });
+      setMgmtToken(res.accessToken);
+      return res.accessToken;
+    } catch {
+      setMgmtToken(null);
+      return null;
+    }
+  }, [account, instance]);
+
   const consentAndGetToken = () => {
-    instance.acquireTokenRedirect({ ...azureManagementLoginRequest, account });
+    instance.acquireTokenRedirect({ ...backendApiLoginRequest, account });
   };
 
   // Auto-acquire token after login
   useEffect(() => {
     if (isAuthenticated && account && inProgress === InteractionStatus.None) {
       getToken();
+      tryAcquireMgmtToken();
     }
-  }, [isAuthenticated, account, inProgress, getToken]);
+  }, [isAuthenticated, account, inProgress, getToken, tryAcquireMgmtToken]);
 
   // â”€â”€â”€ Subscription loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -219,9 +240,9 @@ export default function App() {
     if (!accessToken) return;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/subscriptions`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        const hdrs = { Authorization: `Bearer ${accessToken}` };
+        if (mgmtToken) hdrs["X-Azure-Management-Token"] = mgmtToken;
+        const res = await fetch(`${API_BASE}/subscriptions`, { headers: hdrs });
         if (res.ok) {
           const data = await res.json();
           setSubscriptions(data.subscriptions || []);
@@ -230,6 +251,7 @@ export default function App() {
           }
         }
       } catch { /* ignore */ }
+      setSubsLoaded(true);
     })();
   }, [accessToken]);
 
@@ -253,12 +275,14 @@ export default function App() {
     if (!token) { setChatLoading(false); return; }
 
     try {
-      const res = await fetch(`${API_BASE}/chat`, {
-        method: "POST",
-        headers: {
+      const chatHeaders = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-        },
+      };
+      if (mgmtToken) chatHeaders["X-Azure-Management-Token"] = mgmtToken;
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: chatHeaders,
         body: JSON.stringify({
           message: msg || "",
           subscription_id: selectedSub || null,
@@ -417,7 +441,7 @@ export default function App() {
           </button>
         </nav>
 
-        {subscriptions.length > 0 && (
+        {subscriptions.length > 0 ? (
           <div className="sidebar-section">
             <label className="sidebar-label">Subscription</label>
             <select className="sidebar-select" value={selectedSub}
@@ -430,7 +454,11 @@ export default function App() {
               ))}
             </select>
           </div>
-        )}
+        ) : subsLoaded ? (
+          <div className="sidebar-section" style={{ color: "#f87171", fontSize: 13 }}>
+            No Azure subscriptions found. Your account may not have access, or the management token could not be acquired.
+          </div>
+        ) : null}
 
         <div className="sidebar-section sidebar-questions">
           {QUICK_QUESTION_CATEGORIES.map((cat, ci) => (

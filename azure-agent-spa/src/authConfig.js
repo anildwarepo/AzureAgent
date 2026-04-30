@@ -15,8 +15,20 @@ export const msalConfig = {
   },
 };
 
-// Delegated scope — token is forwarded to backend which exchanges it via OBO
-// for an Azure Management token
-export const azureManagementLoginRequest = {
+// Scope for backend API — only asks for access_as_user (user-consentable,
+// no admin consent required in external tenants)
+export const backendApiLoginRequest = {
   scopes: ["api://220a3110-0efd-4f1b-bbc0-3c4b43ed5e85/access_as_user"],
 };
+
+// Scope for Azure Management — requested separately via incremental consent
+// so external-tenant users aren't blocked by an admin consent prompt on login.
+// If the user's tenant blocks this, the backend OBO flow is used as fallback.
+export const azureManagementLoginRequest = {
+  scopes: ["https://management.azure.com/user_impersonation"],
+};
+
+// Helper: admin consent URL for external tenant admins who want to
+// pre-approve the app for all users in their tenant (optional).
+export const buildAdminConsentUrl = (tenantId) =>
+  `https://login.microsoftonline.com/${tenantId}/adminconsent?client_id=220a3110-0efd-4f1b-bbc0-3c4b43ed5e85&redirect_uri=${encodeURIComponent(window.location.origin)}`;

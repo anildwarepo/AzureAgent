@@ -526,15 +526,28 @@ async def generate_dashboard_report(
         except json.JSONDecodeError:
             pass
 
-    total = resources.get("total_resources", 0)
+    total = resources.get("total_resources", resources.get("total", 0))
     by_type = resources.get("by_type", [])
     by_location = resources.get("by_location", [])
     by_rg = resources.get("by_resource_group", [])
 
+    # Handle both raw Resource Graph output (count_) and LLM-reformatted data (count)
+    def _get_count(item):
+        for key in ("count_", "count", "Count", "total", "value"):
+            v = item.get(key)
+            if v is not None:
+                try:
+                    return int(v)
+                except (ValueError, TypeError):
+                    pass
+        return 0
+
     type_labels = [t.get("type", "").split("/")[-1] for t in by_type[:15]]
-    type_values = [t.get("count_", 0) for t in by_type[:15]]
+    type_values = [_get_count(t) for t in by_type[:15]]
     loc_labels = [l.get("location", "") for l in by_location[:10]]
-    loc_values = [l.get("count_", 0) for l in by_location[:10]]
+    loc_values = [_get_count(l) for l in by_location[:10]]
+
+    logger.info("Dashboard chart data: types=%s values=%s", type_labels[:5], type_values[:5])
 
     type_colors_json = json.dumps(_pick_colors(len(type_labels)))
     loc_colors_json = json.dumps(_pick_colors(len(loc_labels)))
