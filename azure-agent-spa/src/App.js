@@ -253,7 +253,7 @@ export default function App() {
       } catch { /* ignore */ }
       setSubsLoaded(true);
     })();
-  }, [accessToken]);
+  }, [accessToken, mgmtToken]);
 
   // ——— Chat: NDJSON streaming ———————————————————————————————————————————
 
@@ -416,6 +416,16 @@ export default function App() {
           <h1>Azure Operations Agent</h1>
           <p>Monitor, manage, and analyze your Azure resources through an intelligent chat interface.</p>
           <button className="btn-primary" onClick={login}>Sign in with Microsoft</button>
+          <p style={{ marginTop: 16, fontSize: 12, color: "#94a3b8" }}>
+            External organization?{" "}
+            <a href="#" onClick={(e) => {
+              e.preventDefault();
+              const tid = window.prompt("Enter your Azure AD tenant ID (GUID):");
+              if (tid && tid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                window.open(buildAdminConsentUrl(tid), "_blank");
+              }
+            }} style={{ color: "#93c5fd" }}>Request admin consent for your tenant</a>
+          </p>
         </div>
       </div>
     );
@@ -455,8 +465,21 @@ export default function App() {
             </select>
           </div>
         ) : subsLoaded ? (
-          <div className="sidebar-section" style={{ color: "#f87171", fontSize: 13 }}>
-            No Azure subscriptions found. Your account may not have access, or the management token could not be acquired.
+          <div className="sidebar-section" style={{ fontSize: 13 }}>
+            <p style={{ color: "#f87171", margin: "0 0 8px 0" }}>
+              No Azure subscriptions found. Your account may not have access, or the management token could not be acquired.
+            </p>
+            {account?.tenantId && (
+              <p style={{ color: "#94a3b8", margin: 0, fontSize: 12 }}>
+                If your organization requires admin approval,{" "}
+                share this link with your tenant admin:{" "}
+                <a href={buildAdminConsentUrl(account.tenantId)}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ color: "#93c5fd", wordBreak: "break-all" }}>
+                  Grant admin consent
+                </a>
+              </p>
+            )}
           </div>
         ) : null}
 

@@ -280,13 +280,47 @@ Or through the standard consent prompt on first login.
 
 | External tenant consent policy | Login (`access_as_user`) | Azure Management (`user_impersonation`) | Admin action needed? |
 |---|---|---|---|
-| **Allow user consent** (default for many tenants) | Works — no prompt (pre-authorized) | User consents on first use, or `acquireTokenSilent` succeeds automatically | No |
-| **Allow user consent for verified publishers only** | Works — no prompt | Blocked unless your app is a verified publisher | Yes — admin must click consent URL, or you [verify your publisher](https://learn.microsoft.com/en-us/entra/identity-platform/publisher-verification-overview) |
-| **Do not allow user consent** (strict enterprise tenants) | Works — no prompt | Blocked — all third-party app consent requires admin approval | Yes — admin must click consent URL |
+| **Allow user consent** | Works — no prompt (pre-authorized) | User consents on first use, or `acquireTokenSilent` succeeds automatically | No |
+| **Let Microsoft manage** (default, recommended) | Works — no prompt | Likely blocked — your app is unverified third-party to them | Yes — admin must grant consent once |
+| **Allow for verified publishers only** | Works — no prompt | Blocked unless your app is a verified publisher | Yes — admin must grant consent once, or you [verify your publisher](https://learn.microsoft.com/en-us/entra/identity-platform/publisher-verification-overview) |
+| **Do not allow user consent** (strict) | Works — no prompt | Blocked — all third-party app consent requires admin | Yes — admin must grant consent once |
+
+> The consent policy is configured in the external tenant's Azure Portal at:
+> **Microsoft Entra ID → Enterprise applications → Consent and permissions → User consent settings**
+
+#### Admin Consent URL for External Tenants
+
+When an external tenant admin needs to grant consent, they visit this URL **once** in their browser:
+
+```
+https://login.microsoftonline.com/{their-tenant-id}/adminconsent?client_id={your-client-id}
+```
+
+For this app:
+
+```
+https://login.microsoftonline.com/{their-tenant-id}/adminconsent?client_id=220a3110-0efd-4f1b-bbc0-3c4b43ed5e85
+```
+
+**What happens when the admin clicks this URL:**
+
+1. They sign in with their admin account
+2. Entra ID shows the permissions the app requires (Azure Service Management `user_impersonation`)
+3. The admin clicks **Accept**
+4. A service principal for your app is created in their tenant with the consented permissions
+5. **All users** in that tenant can now use the app — no further consent prompts
+
+This is a one-time action per tenant. After this, both the direct management token (`acquireTokenSilent`) and the OBO fallback will work for all users in that tenant.
+
+When a user from an external tenant signs in without admin consent, the SPA automatically detects the missing subscriptions and shows a link to request admin consent:
+
+<p align="center">
+  <img src="docs/admin-consent-prompt.png" alt="Admin consent prompt when no subscriptions found" width="400"/>
+</p>
 
 **Key takeaways:**
 - **Login always works** regardless of the tenant's consent policy — `access_as_user` is pre-authorized and user-consentable
-- **Azure Management access** depends on the tenant — permissive tenants work automatically, strict tenants need a one-time admin approval
+- **Azure Management access** depends on the tenant — permissive tenants work automatically, most enterprise tenants need a one-time admin consent URL click
 - **Azure OpenAI / Foundry** is unaffected — it uses the backend SP identity, not user delegation
 - **Publisher verification** eliminates the admin consent requirement for most tenants
 
