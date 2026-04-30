@@ -274,6 +274,22 @@ https://login.microsoftonline.com/{their-tenant-id}/adminconsent?client_id={your
 
 Or through the standard consent prompt on first login.
 
+### Cross-Tenant Consent Considerations
+
+**Consent** is always required for Azure Management access. **Admin** consent may or may not be, depending on the external tenant's policy:
+
+| External tenant consent policy | Login (`access_as_user`) | Azure Management (`user_impersonation`) | Admin action needed? |
+|---|---|---|---|
+| **Allow user consent** (default for many tenants) | Works — no prompt (pre-authorized) | User consents on first use, or `acquireTokenSilent` succeeds automatically | No |
+| **Allow user consent for verified publishers only** | Works — no prompt | Blocked unless your app is a verified publisher | Yes — admin must click consent URL, or you [verify your publisher](https://learn.microsoft.com/en-us/entra/identity-platform/publisher-verification-overview) |
+| **Do not allow user consent** (strict enterprise tenants) | Works — no prompt | Blocked — all third-party app consent requires admin approval | Yes — admin must click consent URL |
+
+**Key takeaways:**
+- **Login always works** regardless of the tenant's consent policy — `access_as_user` is pre-authorized and user-consentable
+- **Azure Management access** depends on the tenant — permissive tenants work automatically, strict tenants need a one-time admin approval
+- **Azure OpenAI / Foundry** is unaffected — it uses the backend SP identity, not user delegation
+- **Publisher verification** eliminates the admin consent requirement for most tenants
+
 ---
 
 ## Configuration
